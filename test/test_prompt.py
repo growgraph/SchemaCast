@@ -6,9 +6,9 @@ import pytest
 from conftest import DATA
 from graflo.architecture.schema.context import render_type_sheet
 
-from lpgcast.episode import ContextItem, Episode
-from lpgcast.prompt import DATA_SENTENCE, build_messages
-from lpgcast.schema_io import load_schema
+from schemacast.episode import ContextItem, Episode
+from schemacast.prompt import DATA_SENTENCE, build_messages
+from schemacast.schema_io import load_schema
 
 
 @pytest.fixture

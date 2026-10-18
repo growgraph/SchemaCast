@@ -1,14 +1,14 @@
 """Generate ``reference/cli.md`` from the click commands at build time.
 
 One section per command, its help and a table of its options, read from the
-command objects themselves, so the page cannot drift from ``lpgcast/cli.py``.
+command objects themselves, so the page cannot drift from ``schemacast/cli.py``.
 """
 
 import click
 import mkdocs_gen_files
 
-from lpgcast.bench.cli import main as bench
-from lpgcast.cli import main as lpgcast
+from schemacast.bench.cli import main as bench
+from schemacast.cli import main as schemacast
 
 
 def _cell(text: str) -> str:
@@ -49,17 +49,17 @@ def _section(command: click.Command, invocation: str) -> list[str]:
 lines = [
     "# Command line",
     "",
-    "`lpgcast` (alias `text2lpg`) casts text; `lpgcast-bench` runs the",
+    "`schemacast` casts text; `schemacast-bench` runs the",
     "[benchmark](../guides/benchmark.md). Model settings come from the",
     "[environment](settings.md).",
     "",
 ]
-assert isinstance(lpgcast, click.Group)
-for name, command in lpgcast.commands.items():
-    lines += _section(command, f"lpgcast {name}")
+assert isinstance(schemacast, click.Group)
+for name, command in schemacast.commands.items():
+    lines += _section(command, f"schemacast {name}")
 assert isinstance(bench, click.Group)
 for name, command in bench.commands.items():
-    invocation = "lpgcast-bench" if name == "run" else f"lpgcast-bench {name}"
+    invocation = "schemacast-bench" if name == "run" else f"schemacast-bench {name}"
     lines += _section(command, invocation)
 
 with mkdocs_gen_files.open("reference/cli.md", "w") as f:

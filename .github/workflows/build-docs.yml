@@ -8,7 +8,7 @@ on:
         -   'properdocs.yml'
         -   'pyproject.toml'
         -   'uv.lock'
-        -   'lpgcast/**'
+        -   'schemacast/**'
     # A pull request builds the site strictly but does not deploy it.
     pull_request:
         paths:
@@ -16,7 +16,7 @@ on:
         -   'properdocs.yml'
         -   'pyproject.toml'
         -   'uv.lock'
-        -   'lpgcast/**'
+        -   'schemacast/**'
     workflow_dispatch:
 
 permissions:

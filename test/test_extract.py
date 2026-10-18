@@ -5,16 +5,16 @@ import pytest
 from conftest import DATA
 from graflo.architecture.schema.context import instance_json_schema
 
-from lpgcast.config import CacheSettings
-from lpgcast.episode import Episode
-from lpgcast.extract import (
+from schemacast.config import CacheSettings
+from schemacast.episode import Episode
+from schemacast.extract import (
     INSTANCE_SCHEMA_NAME,
     EpisodeTooLongError,
     WireShapeError,
     extract,
 )
-from lpgcast.prompt import build_messages
-from lpgcast.schema_io import load_schema
+from schemacast.prompt import build_messages
+from schemacast.schema_io import load_schema
 
 REPLY = {
     "vertices": [

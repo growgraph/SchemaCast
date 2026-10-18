@@ -1,7 +1,7 @@
 """Settings, read from the environment.
 
-Three prefixes, none shared with other tools: ``LPGCAST_LLM_`` for the model,
-``LPGCAST_CACHE_`` for the response cache and ``LPGCAST_`` for the rest. No
+Three prefixes, none shared with other tools: ``SCHEMACAST_LLM_`` for the model,
+``SCHEMACAST_CACHE_`` for the response cache and ``SCHEMACAST_`` for the rest. No
 ``.env`` file is read; export the variables or pass the settings objects.
 """
 
@@ -15,7 +15,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ResponseFormat = Literal["auto", "json_schema", "json_object"]
 
-#: Model used when ``LPGCAST_LLM_MODEL`` is unset: an OpenAI model for high
+#: Model used when ``SCHEMACAST_LLM_MODEL`` is unset: an OpenAI model for high
 #: volume. Any other endpoint needs its own model name.
 DEFAULT_MODEL = "gpt-5.6-luna"
 
@@ -23,7 +23,7 @@ DEFAULT_MODEL = "gpt-5.6-luna"
 class LLMSettings(BaseSettings):
     """The model endpoint: any OpenAI-compatible server (OpenAI, Ollama ``/v1``, vLLM)."""
 
-    model_config = SettingsConfigDict(env_prefix="LPGCAST_LLM_", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="SCHEMACAST_LLM_", extra="ignore")
 
     model: str = Field(
         default=DEFAULT_MODEL,
@@ -98,14 +98,14 @@ class LLMSettings(BaseSettings):
 class CacheSettings(BaseSettings):
     """The on-disk response cache."""
 
-    model_config = SettingsConfigDict(env_prefix="LPGCAST_CACHE_", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="SCHEMACAST_CACHE_", extra="ignore")
 
     enabled: bool = Field(default=True, description="Read and write cached responses.")
     dir: Path | None = Field(
         default=None,
         description=(
             "Cache directory. Unset: ``./.test_cache`` under pytest, else "
-            "``$XDG_CACHE_HOME/lpgcast`` or ``~/.cache/lpgcast``."
+            "``$XDG_CACHE_HOME/schemacast`` or ``~/.cache/schemacast``."
         ),
     )
     read_only: bool = Field(
@@ -126,10 +126,10 @@ class CacheSettings(BaseSettings):
         return self
 
 
-class LPGCastSettings(BaseSettings):
+class SchemaCastSettings(BaseSettings):
     """Top-level settings."""
 
-    model_config = SettingsConfigDict(env_prefix="LPGCAST_", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="SCHEMACAST_", extra="ignore")
 
     llm: LLMSettings = Field(default_factory=LLMSettings)
     cache: CacheSettings = Field(default_factory=CacheSettings)
@@ -155,9 +155,9 @@ class LPGCastSettings(BaseSettings):
 
 
 class ServeSettings(BaseSettings):
-    """``lpgcast serve``: the HTTP service."""
+    """``schemacast serve``: the HTTP service."""
 
-    model_config = SettingsConfigDict(env_prefix="LPGCAST_SERVE_", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="SCHEMACAST_SERVE_", extra="ignore")
 
     api_key: SecretStr | None = Field(
         default=None,

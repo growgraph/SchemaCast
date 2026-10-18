@@ -8,10 +8,10 @@ request, so it is answered from the cache.
 ## Replaying a cast
 
 ```bash
-lpgcast cast ... --replay
+schemacast cast ... --replay
 ```
 
-`--replay` (or `LPGCAST_CACHE_REQUIRE_HIT=true`) serves every reply from the
+`--replay` (or `SCHEMACAST_CACHE_REQUIRE_HIT=true`) serves every reply from the
 cache, and a miss stops the run with an error instead of calling the model. A
 replay that finishes therefore made no request. Its graph, groundings,
 quarantine, pending edges and episode results are byte-identical to the first
@@ -25,14 +25,14 @@ replay misses too; cast it again without `--replay` to fill the cache.
 
 | Variable | Effect |
 |---|---|
-| `LPGCAST_CACHE_DIR` | Where replies are kept. Default `$XDG_CACHE_HOME/lpgcast` or `~/.cache/lpgcast`. |
-| `LPGCAST_CACHE_ENABLED` | `false` neither reads nor writes the cache. |
-| `LPGCAST_CACHE_READ_ONLY` | Serve cached replies, write no new ones. |
-| `LPGCAST_CACHE_REQUIRE_HIT` | A miss raises; what `--replay` sets. |
+| `SCHEMACAST_CACHE_DIR` | Where replies are kept. Default `$XDG_CACHE_HOME/schemacast` or `~/.cache/schemacast`. |
+| `SCHEMACAST_CACHE_ENABLED` | `false` neither reads nor writes the cache. |
+| `SCHEMACAST_CACHE_READ_ONLY` | Serve cached replies, write no new ones. |
+| `SCHEMACAST_CACHE_REQUIRE_HIT` | A miss raises; what `--replay` sets. |
 
 ## Without a key
 
-With no `LPGCAST_LLM_API_KEY`, LPGCast never calls a provider: a cached reply
+With no `SCHEMACAST_LLM_API_KEY`, SchemaCast never calls a provider: a cached reply
 is served, and a miss is a configuration error. Sharing a cache directory is
 therefore enough to let someone reproduce a run without credentials.
 

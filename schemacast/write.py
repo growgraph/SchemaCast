@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from graflo.connections.onto import DBConfig
     from graflo.hq.container_write import ContainerWriteReport
 
-    from lpgcast.cast import CastResult
+    from schemacast.cast import CastResult
 
 #: A secondary identity that matches several vertices names none of them.
 LOOKUP_AMBIGUITY = "skip"

@@ -9,13 +9,13 @@ permissions:
 
 jobs:
     pypi-publish:
-        # Off until the `lpgcast` name is reserved on PyPI: set the repository
+        # Off until the `schemacast` name is reserved on PyPI: set the repository
         # variable PYPI_PUBLISH to `true` to turn publishing on.
         if: vars.PYPI_PUBLISH == 'true'
         runs-on: ubuntu-latest
         environment:
             name: pypi
-            url: https://pypi.org/p/lpgcast
+            url: https://pypi.org/p/schemacast
         permissions:
             id-token: write
 

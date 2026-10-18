@@ -23,12 +23,12 @@ from graflo.architecture.schema.identity_digest import compute_vertex_identity
 from graflo.architecture.schema.vertex import Vertex
 from pydantic import BaseModel
 
-from lpgcast.bench.corpus import ExpectedEpisode, ExpectedGraph, ExpectedProp
-from lpgcast.cast import EpisodeOutcome
-from lpgcast.ground import Span, locate
-from lpgcast.llm.usage import UsageTracker
-from lpgcast.resolve import Resolution
-from lpgcast.validate import CONSEQUENTIAL, Validation
+from schemacast.bench.corpus import ExpectedEpisode, ExpectedGraph, ExpectedProp
+from schemacast.cast import EpisodeOutcome
+from schemacast.ground import Span, locate
+from schemacast.llm.usage import UsageTracker
+from schemacast.resolve import Resolution
+from schemacast.validate import CONSEQUENTIAL, Validation
 
 #: Findings that are about grounding or follow from another, not about the schema.
 NOT_CONFORMANCE = frozenset({"quote_not_found", "value_not_in_quote"}) | CONSEQUENTIAL

@@ -8,14 +8,14 @@ import httpx
 import pytest
 from conftest import DATA, completion, error
 
-from lpgcast.cast import LPGCaster
-from lpgcast.config import CacheSettings, LPGCastSettings
-from lpgcast.episode import Episode
-from lpgcast.llm import CacheMissError, LLMConfigurationError
-from lpgcast.output import save_cast
-from lpgcast.schema_io import load_schema
-from lpgcast.select import SelectionConfig
-from lpgcast.sink import JsonlQuarantineSink, MemoryQuarantineSink
+from schemacast.cast import SchemaCaster
+from schemacast.config import CacheSettings, SchemaCastSettings
+from schemacast.episode import Episode
+from schemacast.llm import CacheMissError, LLMConfigurationError
+from schemacast.output import save_cast
+from schemacast.schema_io import load_schema
+from schemacast.select import SelectionConfig
+from schemacast.sink import JsonlQuarantineSink, MemoryQuarantineSink
 
 ANN = Episode(
     source_id="m1",
@@ -111,7 +111,7 @@ def make_caster(make_client, plant):
     def _build(routes, **kwargs):
         client, endpoint = make_client(routes=routes, **kwargs.pop("client", {}))
         sink = kwargs.pop("sink", MemoryQuarantineSink())
-        caster = LPGCaster(plant, client=client, sink=sink, **kwargs)
+        caster = SchemaCaster(plant, client=client, sink=sink, **kwargs)
         return caster, endpoint, sink
 
     return _build
@@ -273,8 +273,8 @@ async def test_selection_failure_is_an_episode_record(make_caster):
 
 
 async def test_too_long_episode_is_an_episode_record(make_caster, monkeypatch):
-    monkeypatch.setenv("LPGCAST_MAX_EPISODE_TOKENS", "5")
-    caster, endpoint, _sink = make_caster({}, settings=LPGCastSettings())
+    monkeypatch.setenv("SCHEMACAST_MAX_EPISODE_TOKENS", "5")
+    caster, endpoint, _sink = make_caster({}, settings=SchemaCastSettings())
     result = await caster.cast([ANN])
     assert result.episodes[0].failure == "too_long"
     assert endpoint.requests == []
@@ -348,7 +348,7 @@ async def test_replay_of_an_unseen_episode_stops_the_run(make_caster):
 
 
 async def test_an_identity_from_context_is_grounded_there(make_caster):
-    from lpgcast.episode import ContextItem
+    from schemacast.episode import ContextItem
 
     episode = Episode(
         source_id="m4",

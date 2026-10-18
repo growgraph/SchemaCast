@@ -1,6 +1,6 @@
 # Identities and mentions
 
-LPGCast computes every identity before it builds an edge, the same way graflo
+SchemaCast computes every identity before it builds an edge, the same way graflo
 does for any other source. How depends on how the vertex type is identified:
 
 | Identity of the type | Where its key comes from |

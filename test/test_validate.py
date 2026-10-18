@@ -6,9 +6,9 @@ from typing import Any
 import pytest
 from conftest import DATA
 
-from lpgcast.extract import WireExtraction
-from lpgcast.schema_io import load_schema
-from lpgcast.validate import validate
+from schemacast.extract import WireExtraction
+from schemacast.schema_io import load_schema
+from schemacast.validate import validate
 
 TEXT = "Ann (ann@x.com) operates press S-7, rated 200 kW, since 2024-03. Call +1 555."
 
@@ -264,7 +264,7 @@ def test_a_date_part_its_quote_does_not_state_is_a_finding(plant):
 
 
 def test_an_identity_value_grounds_in_context(plant):
-    from lpgcast.episode import ContextItem
+    from schemacast.episode import ContextItem
 
     text = "The press is leaking again."
     context = [ContextItem(source_id="m0", text="Press S-7 was serviced on Monday.")]
@@ -288,7 +288,7 @@ def test_an_identity_value_grounds_in_context(plant):
 
 
 def test_a_non_identity_value_does_not_ground_in_context(plant):
-    from lpgcast.episode import ContextItem
+    from schemacast.episode import ContextItem
 
     text = "Press S-7 is leaking again."
     context = [ContextItem(source_id="m0", text="It is rated 200 kW.")]

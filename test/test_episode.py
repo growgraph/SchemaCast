@@ -3,7 +3,7 @@
 import pytest
 from conftest import DATA
 
-from lpgcast.episode import Episode, EpisodeFileError, read_episodes
+from schemacast.episode import Episode, EpisodeFileError, read_episodes
 
 
 def test_reads_episodes_and_skips_blank_lines():

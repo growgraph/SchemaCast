@@ -1,4 +1,4 @@
-"""Command line: ``lpgcast`` (alias ``text2lpg``)."""
+"""Command line: ``schemacast``."""
 
 from __future__ import annotations
 
@@ -10,17 +10,17 @@ from pathlib import Path
 import click
 from graflo.architecture.schema.context import instance_json_schema, render_type_sheet
 
-from lpgcast import __version__
-from lpgcast.config import LPGCastSettings
-from lpgcast.episode import Episode, read_episodes
-from lpgcast.llm.cache import CacheMissError
-from lpgcast.llm.client import LLMConfigurationError
-from lpgcast.schema_io import load_schema
-from lpgcast.select import SelectionConfig, SelectionError, select
+from schemacast import __version__
+from schemacast.config import SchemaCastSettings
+from schemacast.episode import Episode, read_episodes
+from schemacast.llm.cache import CacheMissError
+from schemacast.llm.client import LLMConfigurationError
+from schemacast.schema_io import load_schema
+from schemacast.select import SelectionConfig, SelectionError, select
 
 
 @click.group()
-@click.version_option(__version__, prog_name="lpgcast")
+@click.version_option(__version__, prog_name="schemacast")
 def main() -> None:
     """Cast text into a labeled property graph against a governed GraFlo schema."""
 
@@ -76,7 +76,7 @@ def select_command(
     """
     if (text is None) == (episodes_path is None):
         raise click.UsageError("Give exactly one of --text or --episodes.")
-    settings = LPGCastSettings()
+    settings = SchemaCastSettings()
     config = SelectionConfig(
         max_tokens=settings.slice_max_tokens, max_elements=settings.slice_max_elements
     )
@@ -183,17 +183,17 @@ def cast(
     Episodes that produce nothing are quarantined and the run goes on; a
     misconfigured model, or a cache miss under --replay, stops it.
     """
-    from lpgcast.cast import LPGCaster
-    from lpgcast.output import QUARANTINE_FILE, save_cast
-    from lpgcast.sink import JsonlQuarantineSink
+    from schemacast.cast import SchemaCaster
+    from schemacast.output import QUARANTINE_FILE, save_cast
+    from schemacast.sink import JsonlQuarantineSink
 
-    settings = LPGCastSettings()
+    settings = SchemaCastSettings()
     if replay:
         settings.cache = settings.cache.model_copy(update={"require_hit": True})
     out_dir.mkdir(parents=True, exist_ok=True)
     quarantine = out_dir / QUARANTINE_FILE
     quarantine.unlink(missing_ok=True)
-    caster = LPGCaster(
+    caster = SchemaCaster(
         load_schema(schema_path),
         settings=settings,
         sink=JsonlQuarantineSink(quarantine),
@@ -206,7 +206,7 @@ def cast(
 
     report = None
     if db_path is not None:
-        from lpgcast.write import load_connection, write_cast
+        from schemacast.write import load_connection, write_cast
 
         report = asyncio.run(
             write_cast(
@@ -226,23 +226,23 @@ def cast(
 
 @main.command()
 @click.option(
-    "--host", help="Address to bind; default LPGCAST_SERVE_HOST or 127.0.0.1."
+    "--host", help="Address to bind; default SCHEMACAST_SERVE_HOST or 127.0.0.1."
 )
-@click.option("--port", type=int, help="Port; default LPGCAST_SERVE_PORT or 8997.")
+@click.option("--port", type=int, help="Port; default SCHEMACAST_SERVE_PORT or 8997.")
 def serve(host: str | None, port: int | None) -> None:
     """Serve POST /cast over HTTP (needs the `server` extra).
 
-    Every request needs `Authorization: Bearer $LPGCAST_SERVE_API_KEY`; without
-    a key the service refuses to cast unless LPGCAST_SERVE_ALLOW_ANONYMOUS is
-    set. Model settings come from LPGCAST_LLM_*.
+    Every request needs `Authorization: Bearer $SCHEMACAST_SERVE_API_KEY`; without
+    a key the service refuses to cast unless SCHEMACAST_SERVE_ALLOW_ANONYMOUS is
+    set. Model settings come from SCHEMACAST_LLM_*.
     """
     try:
-        from lpgcast.serve import run
+        from schemacast.serve import run
     except ImportError as error:
         raise click.ClickException(
-            f"{error.name or 'fastapi'} is missing: pip install 'lpgcast[server]'"
+            f"{error.name or 'fastapi'} is missing: pip install 'schemacast[server]'"
         ) from error
-    from lpgcast.config import ServeSettings
+    from schemacast.config import ServeSettings
 
     settings = ServeSettings()
     overrides = {k: v for k, v in (("host", host), ("port", port)) if v is not None}

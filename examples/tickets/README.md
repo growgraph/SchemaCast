@@ -19,15 +19,15 @@ What the episodes exercise:
 Look first; neither command calls a model:
 
 ```bash
-uv run lpgcast sheet --schema examples/tickets/schema.yaml
-uv run lpgcast select --schema examples/tickets/schema.yaml --episodes examples/tickets/episodes.jsonl
+uv run schemacast sheet --schema examples/tickets/schema.yaml
+uv run schemacast select --schema examples/tickets/schema.yaml --episodes examples/tickets/episodes.jsonl
 ```
 
-Cast, with `LPGCAST_LLM_API_KEY` set (and `LPGCAST_LLM_BASE_URL` / `LPGCAST_LLM_MODEL` for a
+Cast, with `SCHEMACAST_LLM_API_KEY` set (and `SCHEMACAST_LLM_BASE_URL` / `SCHEMACAST_LLM_MODEL` for a
 local server):
 
 ```bash
-uv run lpgcast cast --schema examples/tickets/schema.yaml \
+uv run schemacast cast --schema examples/tickets/schema.yaml \
     --episodes examples/tickets/episodes.jsonl --out out/tickets
 ```
 

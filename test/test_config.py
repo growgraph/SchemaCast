@@ -1,19 +1,24 @@
-"""Settings come from LPGCAST_* variables only."""
+"""Settings come from SCHEMACAST_* variables only."""
 
 import pytest
 from pydantic import ValidationError
 
-from lpgcast.config import DEFAULT_MODEL, CacheSettings, LLMSettings, LPGCastSettings
+from schemacast.config import (
+    DEFAULT_MODEL,
+    CacheSettings,
+    LLMSettings,
+    SchemaCastSettings,
+)
 
 
 def test_reads_its_own_prefixes(monkeypatch, tmp_path):
-    monkeypatch.setenv("LPGCAST_LLM_MODEL", "qwen3:8b")
-    monkeypatch.setenv("LPGCAST_LLM_BASE_URL", "http://localhost:11434/v1")
-    monkeypatch.setenv("LPGCAST_LLM_API_KEY", "local")
-    monkeypatch.setenv("LPGCAST_CACHE_REQUIRE_HIT", "true")
-    monkeypatch.setenv("LPGCAST_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("SCHEMACAST_LLM_MODEL", "qwen3:8b")
+    monkeypatch.setenv("SCHEMACAST_LLM_BASE_URL", "http://localhost:11434/v1")
+    monkeypatch.setenv("SCHEMACAST_LLM_API_KEY", "local")
+    monkeypatch.setenv("SCHEMACAST_CACHE_REQUIRE_HIT", "true")
+    monkeypatch.setenv("SCHEMACAST_CACHE_DIR", str(tmp_path))
 
-    settings = LPGCastSettings()
+    settings = SchemaCastSettings()
     assert settings.llm.model == "qwen3:8b"
     assert settings.llm.base_url == "http://localhost:11434/v1"
     assert settings.llm.api_key is not None

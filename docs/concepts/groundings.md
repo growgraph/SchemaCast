@@ -15,10 +15,10 @@ graph, not into it.
 | `property` | for a property: its name |
 | `char_start`, `char_end`, `quote` | the span of the text, and its characters |
 | `in_context` | set when the span is in a [context](context.md) item: its `source_id`; offsets then point into that item's text |
-| `extractor`, `model`, `schema_ref` | what produced it: the LPGCast version, the model, and `name@version` of the schema |
+| `extractor`, `model`, `schema_ref` | what produced it: the SchemaCast version, the model, and `name@version` of the schema |
 | `reference_time` | the episode's time |
 
-The model gives quotes, never offsets; LPGCast finds each quote in the text,
+The model gives quotes, never offsets; SchemaCast finds each quote in the text,
 exactly first, then ignoring case, accents, runs of whitespace and typographic
 quotes and dashes. When a quote occurs more than once, a property takes the
 occurrence nearest its vertex's or edge's quote. A quote it cannot find is a

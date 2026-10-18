@@ -18,5 +18,5 @@ set to the context item's `source_id`, and its offsets point into that item's
 text. Any other quote found only in context is a `quote_not_found` finding.
 
 Context is shown to the model as data, like the text, and counts towards
-`LPGCAST_MAX_EPISODE_TOKENS`. LPGCast does not assemble it: the caller chooses
+`SCHEMACAST_MAX_EPISODE_TOKENS`. SchemaCast does not assemble it: the caller chooses
 the earlier texts, and should keep them few and recent.

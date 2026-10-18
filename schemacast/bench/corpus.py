@@ -26,7 +26,7 @@ import yaml
 from graflo.architecture.schema.document import Schema
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from lpgcast.episode import Episode, read_episodes
+from schemacast.episode import Episode, read_episodes
 
 BENCH_DIR = Path(__file__).parent
 CASES_DIR = BENCH_DIR / "cases"

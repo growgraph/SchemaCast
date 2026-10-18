@@ -1,6 +1,6 @@
 # Writing to a database
 
-`lpgcast cast --db conn.yaml` writes the graph to any database graflo
+`schemacast cast --db conn.yaml` writes the graph to any database graflo
 supports, after saving it under `--out`. From Python, call
 `await write_cast(result, load_connection("conn.yaml"))`.
 

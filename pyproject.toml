@@ -47,33 +47,34 @@ dependencies = [
 description = "Text to labeled property graph against a governed GraFlo schema"
 keywords = ["graflo", "information-extraction", "knowledge-graph", "llm", "property-graph"]
 license = "Apache-2.0"
-name = "lpgcast"
+name = "schemacast"
 readme = "README.md"
 requires-python = ">=3.11"
-version = "0.2.0"
+version = "0.3.0"
 
 [project.optional-dependencies]
 # Reserved: the dense retrieval lane.
 embed = []
-# `lpgcast serve`.
+# `schemacast serve`.
 server = ["fastapi>=0.134.0,<1", "uvicorn[standard]>=0.30.0,<1"]
 
 [project.scripts]
-lpgcast = "lpgcast.cli:main"
-lpgcast-bench = "lpgcast.bench.cli:main"
-text2lpg = "lpgcast.cli:main"
+schemacast = "schemacast.cli:main"
+schemacast-bench = "schemacast.bench.cli:main"
 
 [project.urls]
-Documentation = "https://growgraph.github.io/LPGCast/"
-Issues = "https://github.com/growgraph/LPGCast/issues"
-Repository = "https://github.com/growgraph/LPGCast"
+Documentation = "https://growgraph.github.io/SchemaCast/"
+Issues = "https://github.com/growgraph/SchemaCast/issues"
+Repository = "https://github.com/growgraph/SchemaCast"
 
 [tool.hatch.build.targets.wheel]
-packages = ["lpgcast"]
+packages = ["schemacast"]
 
 [tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "function"
 asyncio_mode = "auto"
+# A graflo deprecation fails the suite, so it is fixed before graflo removes the name.
+filterwarnings = ["error:.*is deprecated since graflo:DeprecationWarning"]
 markers = [
   "llm: exercises a real language model (skipped unless --run-llm)",
   "neo4j: wipes the Neo4j named by NEO4J_URI (skipped unless --run-neo4j)"

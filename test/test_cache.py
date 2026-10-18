@@ -1,7 +1,7 @@
 """The response cache: keys, atomic entries, read-only and disabled modes."""
 
-from lpgcast.config import CacheSettings, LLMSettings
-from lpgcast.llm.cache import CachedResponse, LLMCache, cache_key, default_cache_dir
+from schemacast.config import CacheSettings, LLMSettings
+from schemacast.llm.cache import CachedResponse, LLMCache, cache_key, default_cache_dir
 
 SCHEMA = {"type": "object"}
 MESSAGES = [{"role": "user", "content": "hi"}]

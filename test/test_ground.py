@@ -1,8 +1,8 @@
-"""Quote location: offsets computed by LPGCast, never taken from the model."""
+"""Quote location: offsets computed by SchemaCast, never taken from the model."""
 
 import pytest
 
-from lpgcast.ground import locate
+from schemacast.ground import locate
 
 TEXT = "Ann  operates\nPress S-7, rated 200 kW."
 

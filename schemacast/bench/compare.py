@@ -17,10 +17,10 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from lpgcast.bench.oracle import ORACLE
-from lpgcast.bench.report import RATES, _fmt, _table, case_score
-from lpgcast.bench.run import BenchReport, Row
-from lpgcast.bench.score import Counts
+from schemacast.bench.oracle import ORACLE
+from schemacast.bench.report import RATES, _fmt, _table, case_score
+from schemacast.bench.run import BenchReport, Row
+from schemacast.bench.score import Counts
 
 #: Rates compared, in report order.
 HEADLINE: tuple[str, ...] = (
@@ -110,7 +110,7 @@ class CompareReport(BaseModel):
 
 
 def load_report(path: str | Path) -> BenchReport:
-    """A report written by ``lpgcast-bench``."""
+    """A report written by ``schemacast-bench``."""
     return BenchReport.model_validate_json(Path(path).read_text(encoding="utf-8"))
 
 

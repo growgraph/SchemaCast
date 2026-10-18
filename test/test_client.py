@@ -9,8 +9,8 @@ import openai
 import pytest
 from conftest import MESSAGES, SCHEMA, completion, error
 
-from lpgcast.config import CacheSettings
-from lpgcast.llm import (
+from schemacast.config import CacheSettings
+from schemacast.llm import (
     CacheMissError,
     LLMConfigurationError,
     LLMJsonParseError,
@@ -19,7 +19,7 @@ from lpgcast.llm import (
     LLMTruncatedError,
     track_usage,
 )
-from lpgcast.llm.client import SCHEMA_INSTRUCTION
+from schemacast.llm.client import SCHEMA_INSTRUCTION
 
 SCHEMA_REJECTED = error(
     400, "Invalid parameter: 'response_format' of type 'json_schema' is not supported"
@@ -101,14 +101,14 @@ async def test_require_hit_raises_on_a_miss(make_client):
 
 async def test_no_key_fails_closed(make_client):
     client, endpoint = make_client({"answer": "x"}, api_key=None)
-    with pytest.raises(LLMConfigurationError, match="LPGCAST_LLM_API_KEY"):
+    with pytest.raises(LLMConfigurationError, match="SCHEMACAST_LLM_API_KEY"):
         await client.acomplete_json(MESSAGES, SCHEMA)
     assert endpoint.requests == []
 
 
 async def test_no_model_fails_closed(make_client):
     client, endpoint = make_client({"answer": "x"}, model="")
-    with pytest.raises(LLMConfigurationError, match="LPGCAST_LLM_MODEL"):
+    with pytest.raises(LLMConfigurationError, match="SCHEMACAST_LLM_MODEL"):
         await client.acomplete_json(MESSAGES, SCHEMA)
     assert endpoint.requests == []
 

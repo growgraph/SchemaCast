@@ -1,15 +1,15 @@
 # Running as a service
 
-`lpgcast serve` casts over HTTP. It suits a platform that holds the schema and
+`schemacast serve` casts over HTTP. It suits a platform that holds the schema and
 writes the graph itself: the service receives the schema with the episodes,
 casts them, and returns the result. It never writes to a database and never
 calls back, so it holds no database credentials.
 
 ```bash
-pip install 'lpgcast[server]'
-export LPGCAST_SERVE_API_KEY=…            # required; see below
-export LPGCAST_LLM_MODEL=… LPGCAST_LLM_API_KEY=…
-lpgcast serve --port 8997
+pip install 'schemacast[server]'
+export SCHEMACAST_SERVE_API_KEY=…            # required; see below
+export SCHEMACAST_LLM_MODEL=… SCHEMACAST_LLM_API_KEY=…
+schemacast serve --port 8997
 ```
 
 ## `POST /cast`
@@ -28,7 +28,7 @@ lpgcast serve --port 8997
 [setting](../reference/settings.md). A request cannot choose the model or its
 endpoint.
 
-The reply holds what [`lpgcast cast --out`](../reference/output.md) writes:
+The reply holds what [`schemacast cast --out`](../reference/output.md) writes:
 `graph` (graflo's `GraFloOutput`), `groundings`, `pending`, `quarantine`,
 `episodes` and `manifest`. To write the graph, pass `graph` and `pending` to
 graflo's `write_container`, the function `write_cast` uses.
@@ -37,7 +37,7 @@ graflo's `write_container`, the function `write_cast` uses.
 |---|---|
 | 200 | cast; an episode that failed is in `episodes` and `quarantine`, not an error |
 | 401 | missing or wrong bearer token |
-| 413 | more episodes than `LPGCAST_SERVE_MAX_EPISODES` |
+| 413 | more episodes than `SCHEMACAST_SERVE_MAX_EPISODES` |
 | 422 | the body, or its `schema`, is not valid |
 | 503 | no key configured, or the model is misconfigured (no key, unknown model) |
 
@@ -47,9 +47,9 @@ batches small enough for the caller's timeout.
 ## Authentication
 
 Every route but `GET /health` needs `Authorization: Bearer
-$LPGCAST_SERVE_API_KEY`. Without a configured key the service refuses to cast
+$SCHEMACAST_SERVE_API_KEY`. Without a configured key the service refuses to cast
 (503) rather than serve anyone who can reach it; set
-`LPGCAST_SERVE_ALLOW_ANONYMOUS=true` only on a development machine.
+`SCHEMACAST_SERVE_ALLOW_ANONYMOUS=true` only on a development machine.
 
 `GET /health` reports the versions, whether a key is configured and the batch
 cap.

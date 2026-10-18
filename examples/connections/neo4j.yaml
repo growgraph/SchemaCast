@@ -1,6 +1,6 @@
 # Neo4j over Bolt. Keep the password out of this file: set NEO4J_PASSWORD,
 # which graflo reads for every field the file leaves out.
-# `lpgcast cast --recreate-schema` and the `neo4j` test marker wipe the
+# `schemacast cast --recreate-schema` and the `neo4j` test marker wipe the
 # database: point them at a disposable one.
 db_type: neo4j
 uri: bolt://localhost:7688

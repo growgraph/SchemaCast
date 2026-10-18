@@ -21,8 +21,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from lpgcast.config import CacheSettings, LLMSettings
-from lpgcast.llm.usage import TokenUsage
+from schemacast.config import CacheSettings, LLMSettings
+from schemacast.llm.usage import TokenUsage
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +63,10 @@ def default_cache_dir() -> Path:
         return Path.cwd() / ".test_cache"
     cache_home = os.environ.get("XDG_CACHE_HOME")
     if cache_home:
-        return Path(cache_home) / "lpgcast"
+        return Path(cache_home) / "schemacast"
     if os.name == "nt":
-        return Path.home() / "AppData" / "Local" / "lpgcast"
-    return Path.home() / ".cache" / "lpgcast"
+        return Path.home() / "AppData" / "Local" / "schemacast"
+    return Path.home() / ".cache" / "schemacast"
 
 
 def cache_key_config(settings: LLMSettings) -> dict[str, Any]:

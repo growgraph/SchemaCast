@@ -20,7 +20,7 @@ through the same steps, and episodes run concurrently.
 
 One call per episode, at most two repairs, and nothing more: no critic pass, no
 chunking, no encoder and no vector store. An episode longer than
-`LPGCAST_MAX_EPISODE_TOKENS` is refused before any call, not split.
+`SCHEMACAST_MAX_EPISODE_TOKENS` is refused before any call, not split.
 
 ## The checks
 
@@ -53,5 +53,5 @@ every other episode would fail the same way.
 
 ## Beside OntoCast
 
-OntoCast builds and evolves an ontology from documents and writes RDF; LPGCast
+OntoCast builds and evolves an ontology from documents and writes RDF; SchemaCast
 casts short, frequent texts into a property-graph schema you already govern.

@@ -1,7 +1,7 @@
 """The model client, its response cache, the tolerant JSON parser and usage accounting."""
 
-from lpgcast.llm.cache import CachedResponse, CacheMissError, LLMCache, cache_key
-from lpgcast.llm.client import (
+from schemacast.llm.cache import CachedResponse, CacheMissError, LLMCache, cache_key
+from schemacast.llm.client import (
     ChatMessage,
     JsonCompletion,
     LLMClient,
@@ -11,8 +11,8 @@ from lpgcast.llm.client import (
     LLMRequestTimeoutError,
     LLMTruncatedError,
 )
-from lpgcast.llm.jsonparse import LLMJsonParseError, parse_json_object
-from lpgcast.llm.usage import TokenUsage, UsageTracker, track_usage
+from schemacast.llm.jsonparse import LLMJsonParseError, parse_json_object
+from schemacast.llm.usage import TokenUsage, UsageTracker, track_usage
 
 __all__ = [
     "CacheMissError",

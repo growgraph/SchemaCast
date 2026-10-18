@@ -1,6 +1,6 @@
 """Generate the Python API reference at build time.
 
-Walks ``lpgcast/**/*.py`` and writes one ``mkdocstrings`` page per public
+Walks ``schemacast/**/*.py`` and writes one ``mkdocstrings`` page per public
 module under ``reference/python/``, into the virtual docs directory that
 ``mkdocs-gen-files`` feeds the build. Private modules (``_*.py``) are skipped.
 
@@ -11,14 +11,14 @@ replaced before anything renders.
 A hand-written overview at ``reference/python/<pkg>/index.md`` replaces the
 generated ``reference/python/<pkg>.md`` (both build to the same URL), so a
 package whose overview exists on disk is skipped here; it must carry
-``::: lpgcast.<pkg>`` itself. The nav is inferred by ``literate-nav``.
+``::: schemacast.<pkg>`` itself. The nav is inferred by ``literate-nav``.
 """
 
 from pathlib import Path
 
 import mkdocs_gen_files
 
-PACKAGE = "lpgcast"
+PACKAGE = "schemacast"
 REFERENCE = Path("docs/reference/python")
 
 

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Renamed from `lpgcast` to `schemacast`**: the distribution, the import package, the CLI
+  (`schemacast`, `schemacast-bench`), `SchemaCaster` and `SchemaCastSettings`, the
+  `SCHEMACAST_` environment prefixes and the default cache directory. The `text2lpg` alias is gone.
+  `serve` reports `schemacast_version`; groundings carry `extractor: schemacast/<version>`.
+
+## [0.2.0] - 2026-10-13
+
 ### Added
 
 - **`lpgcast-bench compare A.json B.json`**: run B read against run A episode by episode, with

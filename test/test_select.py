@@ -9,8 +9,8 @@ from graflo.architecture.schema.metadata import GraphMetadata
 from graflo.architecture.schema.semantics import FieldSemantics, Semantics
 from graflo.architecture.schema.vertex import Field, Vertex, VertexConfig
 
-from lpgcast.schema_io import load_schema
-from lpgcast.select import (
+from schemacast.schema_io import load_schema
+from schemacast.select import (
     SelectionConfig,
     SelectionError,
     number_adjacent_tokens,

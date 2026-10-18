@@ -6,8 +6,8 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
-from lpgcast.bench.run import BenchReport, CaseRecord, Row
-from lpgcast.bench.score import Counts, total
+from schemacast.bench.run import BenchReport, CaseRecord, Row
+from schemacast.bench.score import Counts, total
 
 Rate = Callable[[Counts], float | None]
 
@@ -135,11 +135,11 @@ def to_markdown(report: BenchReport) -> str:
         )
     )
     lines = [
-        "# LPGCast benchmark",
+        "# SchemaCast benchmark",
         "",
         (
             f"Corpus **{report.corpus_version}** · digest `{report.corpus_digest[:12]}…` · "
-            f"split **{report.split}** ({status}) · lpgcast {report.lpgcast_version} · "
+            f"split **{report.split}** ({status}) · schemacast {report.schemacast_version} · "
             f"graflo {report.graflo_version} · started {report.started}"
         ),
         "",
