@@ -19,7 +19,6 @@ from collections.abc import Iterable
 from importlib.metadata import version
 from typing import Any, Literal
 
-from graflo.architecture.schema.context import instance_json_schema
 from graflo.architecture.schema.document import Schema
 from graflo.architecture.schema.graflo_output import GraFloOutput
 from openai import APIError
@@ -33,6 +32,7 @@ from schemacast.extract import (
     EpisodeTooLongError,
     WireExtraction,
     WireShapeError,
+    episode_shape,
     extract,
 )
 from schemacast.ground import Grounding
@@ -63,10 +63,10 @@ from schemacast.select import (
     select,
 )
 from schemacast.sink import MemoryQuarantineSink, QuarantineRecord, QuarantineSink
-from schemacast.validate import Finding, Fix, Validation, validate
+from schemacast.validate import Finding, Fix, UnresolvedMention, Validation, validate
 
 #: Version of the files a cast writes; bumped when a record's meaning changes.
-OUTPUT_FORMAT_VERSION = 2
+OUTPUT_FORMAT_VERSION = 3
 
 #: Repair requests after the first reply, at most.
 MAX_REPAIRS = 2
@@ -127,7 +127,17 @@ class EpisodeResult(BaseModel):
     )
     quarantined: int = 0
     unmapped: int = 0
+    unresolved: int = Field(
+        default=0,
+        description="Mentions with no key and no picked entity; a later cast may resolve them.",
+    )
     fixes: list[Fix] = Field(default_factory=list)
+
+
+class UnresolvedRecord(UnresolvedMention):
+    """An unresolved mention, with the episode it is in."""
+
+    source_id: str
 
 
 class RunManifest(BaseModel):
@@ -151,6 +161,7 @@ class RunManifest(BaseModel):
     pending: int
     quarantined: int
     unmapped: int
+    unresolved: int = 0
     usage: UsageTracker
 
 
@@ -165,6 +176,7 @@ class CastResult(BaseModel):
     pending: list[PendingEdge] = Field(default_factory=list)
     groundings: list[Grounding] = Field(default_factory=list)
     episodes: list[EpisodeResult] = Field(default_factory=list)
+    unresolved: list[UnresolvedRecord] = Field(default_factory=list)
     manifest: RunManifest
 
 
@@ -321,9 +333,13 @@ class SchemaCaster:
         messages = build_messages(
             slice_, episode, user_instruction=self.settings.user_instruction
         )
-        shape = instance_json_schema(slice_)
+        shape = episode_shape(slice_, episode)
         current = first = validate(
-            extraction.wire, slice_, episode.text, episode.context
+            extraction.wire,
+            slice_,
+            episode.text,
+            episode.context,
+            episode.candidates,
         )
         current_reply = extraction.completion.content
         best, best_reply = current, current_reply
@@ -351,7 +367,9 @@ class SchemaCaster:
                 requests += 1
                 repair_failure = _fault_kind(error)
                 break
-            current = validate(wire, slice_, episode.text, episode.context)
+            current = validate(
+                wire, slice_, episode.text, episode.context, episode.candidates
+            )
             current_reply = completion.content
             if current.kept >= best.kept:
                 best, best_reply = current, current_reply
@@ -383,6 +401,7 @@ class SchemaCaster:
                 pending=len(resolution.pending),
                 quarantined=len(best.findings),
                 unmapped=len(best.unmapped),
+                unresolved=len(best.unresolved),
                 fixes=best.fixes,
                 **known,
             ),
@@ -482,8 +501,15 @@ class SchemaCaster:
             pending=sum(r.pending for r in results),
             quarantined=sum(r.quarantined for r in results),
             unmapped=sum(r.unmapped for r in results),
+            unresolved=sum(r.unresolved for r in results),
             usage=usage,
         )
+        unresolved = [
+            UnresolvedRecord(source_id=o.result.source_id, **u.model_dump())
+            for o in outcomes
+            if o.validation is not None
+            for u in o.validation.unresolved
+        ]
         return CastResult(
             output=GraFloOutput.model_validate(
                 {"schema": self.schema, "data": container}
@@ -491,5 +517,6 @@ class SchemaCaster:
             pending=[edge for r in resolutions for edge in r.pending],
             groundings=[g for r in resolutions for g in r.groundings],
             episodes=results,
+            unresolved=unresolved,
             manifest=manifest,
         )

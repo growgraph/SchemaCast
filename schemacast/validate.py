@@ -29,7 +29,7 @@ from graflo.architecture.schema.vertex import Field as SchemaField
 from graflo.architecture.schema.vertex import Vertex
 from pydantic import BaseModel, Field
 
-from schemacast.episode import ContextItem
+from schemacast.episode import Candidate, ContextItem
 from schemacast.extract import WireExtraction, WireProp
 from schemacast.fidelity import value_mismatch
 from schemacast.ground import Span, locate
@@ -90,7 +90,13 @@ class Finding(BaseModel):
 class Fix(BaseModel):
     """A deterministic correction applied without asking the model."""
 
-    kind: Literal["coerced", "edge_reversed", "quote_normalized", "grounded_in_context"]
+    kind: Literal[
+        "coerced",
+        "edge_reversed",
+        "quote_normalized",
+        "grounded_in_context",
+        "candidate_rejected",
+    ]
     path: str
     message: str
 
@@ -104,6 +110,27 @@ class ValidVertex(BaseModel):
     props: dict[str, Any]
     span: Span
     prop_spans: dict[str, Span]
+    candidate: str | None = Field(
+        default=None, description="The known entity the model picked, if any."
+    )
+    candidate_key: dict[str, Any] | None = Field(
+        default=None, description="That entity's identity, which the vertex takes."
+    )
+    lane: str | None = Field(default=None, description="How the entity was found.")
+
+
+class UnresolvedMention(BaseModel):
+    """A vertex the text only refers to, with no key and no valid pick.
+
+    Never minted; the edges that reach it are held with it, so a later cast
+    with more known entities can resolve both.
+    """
+
+    ref: str
+    type: str
+    quote: str
+    span: Span | None
+    held_edges: int = Field(default=0, description="Edges left out because of it.")
 
 
 class ValidEdge(BaseModel):
@@ -131,6 +158,7 @@ class Validation(BaseModel):
     vertices: list[ValidVertex] = Field(default_factory=list)
     edges: list[ValidEdge] = Field(default_factory=list)
     unmapped: list[ValidUnmapped] = Field(default_factory=list)
+    unresolved: list[UnresolvedMention] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
     fixes: list[Fix] = Field(default_factory=list)
 
@@ -189,12 +217,32 @@ def identity_fields(vertex: Vertex) -> frozenset[str]:
 
 class _Checker:
     def __init__(
-        self, slice_: Schema, text: str, context: Sequence[ContextItem] = ()
+        self,
+        slice_: Schema,
+        text: str,
+        context: Sequence[ContextItem] = (),
+        candidates: Sequence[Candidate] = (),
     ) -> None:
         self.slice = slice_
         self.text = text
         self.context = {item.source_id: item.text for item in context}
+        self.candidates = {candidate.cid: candidate for candidate in candidates}
         self.result = Validation()
+
+    def pick(self, cid: str | None, type_: str, path: str) -> Candidate | None:
+        """The known entity *cid* names, if it exists and is of *type_*."""
+        if cid is None:
+            return None
+        candidate = self.candidates.get(cid)
+        if candidate is None or candidate.type != type_:
+            found = "no such entity" if candidate is None else f"a {candidate.type}"
+            self.fix(
+                "candidate_rejected",
+                path,
+                f"Candidate {cid!r} for a {type_} is {found}; left unpicked.",
+            )
+            return None
+        return candidate
 
     def source(self, span: Span) -> str:
         text = self.text if span.context is None else self.context[span.context]
@@ -362,10 +410,19 @@ class _Checker:
                     **common,
                 )
                 continue
-            reason = self.identity_ok(vertex, wv.mention, props)
-            if reason is not None:
-                self.find(kind="identity_insufficient", message=reason, **common)
-                continue
+            candidate = self.pick(wv.candidate, wv.type, path)
+            if candidate is None:
+                if wv.mention and mention_identity(vertex, props) is None:
+                    self.result.unresolved.append(
+                        UnresolvedMention(
+                            ref=wv.ref, type=wv.type, quote=wv.quote, span=span
+                        )
+                    )
+                    continue
+                reason = self.identity_ok(vertex, wv.mention, props)
+                if reason is not None:
+                    self.find(kind="identity_insufficient", message=reason, **common)
+                    continue
             self.result.vertices.append(
                 ValidVertex(
                     ref=wv.ref,
@@ -374,6 +431,9 @@ class _Checker:
                     props=props,
                     span=span,
                     prop_spans=prop_spans,
+                    candidate=candidate.cid if candidate else None,
+                    candidate_key=dict(candidate.key) if candidate else None,
+                    lane=candidate.lane if candidate else None,
                 )
             )
         return refs
@@ -384,6 +444,7 @@ class _Checker:
 
     def edges(self, wire: WireExtraction, refs: dict[str, str]) -> None:
         valid_refs = {v.ref for v in self.result.vertices}
+        unresolved = {u.ref: u for u in self.result.unresolved}
         for k, we in enumerate(wire.edges):
             path = f"edges[{k}]"
             common = {"scope": "edge", "path": path, "fragment": _dump(we)}
@@ -395,6 +456,12 @@ class _Checker:
                     message=f"No vertex has ref {missing[0]!r}.",
                     **common,
                 )
+                continue
+            held = next(
+                (unresolved[r] for r in (we.from_, we.to) if r in unresolved), None
+            )
+            if held is not None:
+                held.held_edges += 1
                 continue
             invalid = [r for r in (we.from_, we.to) if r not in valid_refs]
             if invalid:
@@ -465,9 +532,11 @@ def validate(
     slice_: Schema,
     text: str,
     context: Sequence[ContextItem] = (),
+    candidates: Sequence[Candidate] = (),
 ) -> Validation:
-    """Check *wire* against *slice_*, the episode *text* and its *context*."""
-    checker = _Checker(slice_, text, context)
+    """Check *wire* against *slice_*, the episode *text*, its *context* and the
+    known entities it may pick (*candidates*)."""
+    checker = _Checker(slice_, text, context, candidates)
     refs = checker.vertices(wire)
     checker.edges(wire, refs)
     checker.unmapped(wire)

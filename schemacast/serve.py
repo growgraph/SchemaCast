@@ -25,7 +25,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from schemacast import __version__
-from schemacast.cast import EpisodeResult, RunManifest, SchemaCaster
+from schemacast.cast import EpisodeResult, RunManifest, SchemaCaster, UnresolvedRecord
 from schemacast.config import SchemaCastSettings, ServeSettings
 from schemacast.episode import Episode
 from schemacast.ground import Grounding
@@ -67,6 +67,7 @@ class CastResponse(BaseModel):
     pending: list[PendingEdge]
     quarantine: list[QuarantineRecord]
     episodes: list[EpisodeResult]
+    unresolved: list[UnresolvedRecord] = Field(default_factory=list)
     manifest: RunManifest
 
 
@@ -152,6 +153,7 @@ def create_app(
             pending=result.pending,
             quarantine=sink.records,
             episodes=result.episodes,
+            unresolved=result.unresolved,
             manifest=result.manifest,
         )
 

@@ -370,4 +370,4 @@ async def test_an_identity_from_context_is_grounded_there(make_caster):
     serial = next(g for g in result.groundings if g.property == "serial")
     assert (serial.in_context, serial.quote) == ("m0", "S-7")
     assert all(g.in_context is None for g in result.groundings if g is not serial)
-    assert result.manifest.output_format_version == 2
+    assert result.manifest.output_format_version >= 2

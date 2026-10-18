@@ -7,11 +7,14 @@
 | ``pending.jsonl`` | edges awaiting a secondary-identity lookup | yes |
 | ``episodes.jsonl`` | one result per episode | yes |
 | ``quarantine.jsonl`` | what was left out, and ``unmapped`` items | yes |
+| ``unresolved.jsonl`` | mentions with no key and no picked entity, never minted | yes |
 | ``manifest.json`` | versions, settings, counts and usage | no: usage differs |
 | ``write.json`` | what was sent to the database, when one was given | — |
 
 ``manifest.json`` names the ``output_format_version``. Version 2: a grounding
 whose ``in_context`` is set has offsets into that context item's text.
+Version 3: a vertex grounding names how the vertex was identified
+(``resolved_by``), and unresolved mentions have their own file.
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ from pydantic import BaseModel
 from schemacast.cast import CastResult
 
 QUARANTINE_FILE = "quarantine.jsonl"
+UNRESOLVED_FILE = "unresolved.jsonl"
 
 
 def _json(data: Any) -> str:
@@ -56,6 +60,7 @@ def save_cast(
     (out / "groundings.jsonl").write_text(_jsonl(result.groundings), encoding="utf-8")
     (out / "pending.jsonl").write_text(_jsonl(result.pending), encoding="utf-8")
     (out / "episodes.jsonl").write_text(_jsonl(result.episodes), encoding="utf-8")
+    (out / UNRESOLVED_FILE).write_text(_jsonl(result.unresolved), encoding="utf-8")
     (out / "manifest.json").write_text(
         _json(result.manifest.model_dump(mode="json")) + "\n", encoding="utf-8"
     )

@@ -28,7 +28,7 @@ chunking, no encoder and no vector store. An episode longer than
 |---|---|
 | `unknown_type` | a vertex whose type is not in the slice |
 | `duplicate_ref` | a second vertex with the same `ref` |
-| `identity_insufficient` | a vertex whose identity the text does not give (or a mention with no key to look it up by) |
+| `identity_insufficient` | a vertex the text describes whose identity it does not give (a mention with no key is unresolved instead, see [Identities](identities.md)) |
 | `undeclared_edge` | an edge whose relation the slice does not declare between those types, either way round |
 | `dangling_ref` | an edge to a `ref` no vertex has |
 | `undeclared_property` | a property its type does not declare |

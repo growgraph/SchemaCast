@@ -193,10 +193,12 @@ def test_mentions_need_a_full_primary_or_secondary_identity(plant):
     }
     assert _check(plant, {"vertices": [by_phone]}).findings == []
 
+    # A mention with no key is unresolved, not a finding: it is never minted
+    # and is reported for a later cast to resolve.
     by_name = {**by_phone, "props": [{"name": "name", "value": "Ann", "quote": "Ann"}]}
-    assert _kinds(_check(plant, {"vertices": [by_name]})) == [
-        ("identity_insufficient", "vertex", "vertices[0]")
-    ]
+    result = _check(plant, {"vertices": [by_name]})
+    assert result.findings == [] and result.vertices == []
+    assert [(u.ref, u.type) for u in result.unresolved] == [("v1", "Person")]
 
     work_order = {
         "ref": "w",
@@ -205,8 +207,9 @@ def test_mentions_need_a_full_primary_or_secondary_identity(plant):
         "mention": True,
         "props": [],
     }
-    finding = _check(plant, {"vertices": [work_order]}).findings[0]
-    assert "cannot be referred to" in finding.message
+    result = _check(plant, {"vertices": [work_order]})
+    assert result.findings == []
+    assert [u.ref for u in result.unresolved] == ["w"]
 
 
 def test_reversed_edge_is_flipped_and_recorded(plant):

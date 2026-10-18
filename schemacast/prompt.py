@@ -13,6 +13,7 @@ sentence telling the model it is data.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 
 from graflo.architecture.schema.context import render_type_sheet
@@ -69,6 +70,27 @@ def _block(kind: str, source_id: str, text: str) -> str:
     return f"<<<{kind} id={_safe_id(source_id)} tag={tag}>>>\n{text}\n<<<END {kind} tag={tag}>>>"
 
 
+KNOWN_ENTITIES_RULE = """\
+These entities already exist. When a vertex you record is one of them, set its
+`candidate` to that id, even if the text gives no key; otherwise set it to null.
+Pick only an entity of the same type."""
+
+
+def _known_entities(episode: Episode) -> str:
+    lines = []
+    for candidate in episode.candidates:
+        key = ", ".join(f"{name}={value}" for name, value in candidate.key.items())
+        label = (
+            f" {json.dumps(candidate.label, ensure_ascii=False)}"
+            if candidate.label
+            else ""
+        )
+        lines.append(f"- {candidate.cid}: {candidate.type}{label} ({key})")
+    # Labels come from the graph, which may hold text cast from earlier messages.
+    block = _block("ENTITIES", episode.source_id, "\n".join(lines))
+    return f"# KNOWN ENTITIES\n\n{KNOWN_ENTITIES_RULE}\n\n{DATA_SENTENCE}\n\n{block}"
+
+
 def system_message(slice_: Schema) -> ChatMessage:
     """Preamble, type sheet and rules: everything that depends on the slice only."""
     sheet = render_type_sheet(slice_).rstrip("\n")
@@ -90,6 +112,8 @@ def user_message(
             _block("CONTEXT", item.source_id, item.text) for item in episode.context
         )
         parts.append(f"# CONTEXT\n\n{DATA_SENTENCE}\n\n{blocks}")
+    if episode.candidates:
+        parts.append(_known_entities(episode))
     header = f"# TEXT\n\n{DATA_SENTENCE}"
     if episode.reference_time is not None:
         header += f"\nWritten at: {episode.reference_time.isoformat()}"

@@ -12,7 +12,7 @@ from graflo.architecture.schema.context import instance_json_schema, render_type
 
 from schemacast import __version__
 from schemacast.config import SchemaCastSettings
-from schemacast.episode import Episode, read_episodes
+from schemacast.episode import Episode, read_candidates, read_episodes, with_known
 from schemacast.llm.cache import CacheMissError
 from schemacast.llm.client import LLMConfigurationError
 from schemacast.schema_io import load_schema
@@ -169,6 +169,12 @@ def select_command(
 @click.option(
     "--concurrency", default=8, show_default=True, help="Episodes cast at once."
 )
+@click.option(
+    "--known",
+    "known_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Known entities, one candidate per line, for episodes that carry none.",
+)
 def cast(
     schema_path: Path,
     episodes_path: Path,
@@ -177,6 +183,7 @@ def cast(
     replay: bool,
     recreate_schema: bool,
     concurrency: int,
+    known_path: Path | None,
 ) -> None:
     """Cast EPISODES into SCHEMA and save the result under OUT.
 
@@ -199,8 +206,11 @@ def cast(
         sink=JsonlQuarantineSink(quarantine),
         max_concurrent_episodes=concurrency,
     )
+    known = read_candidates(known_path) if known_path is not None else []
     try:
-        result = asyncio.run(caster.cast(read_episodes(episodes_path)))
+        result = asyncio.run(
+            caster.cast(with_known(read_episodes(episodes_path), known))
+        )
     except (LLMConfigurationError, CacheMissError) as error:
         raise click.ClickException(str(error)) from error
 

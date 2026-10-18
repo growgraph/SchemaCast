@@ -159,3 +159,12 @@ class Grounding(BaseModel):
     )
     schema_ref: str = Field(description="``<schema name>@<version>``.")
     reference_time: datetime | None = None
+    resolved_by: Literal["identity", "secondary", "candidate", "minted"] | None = Field(
+        default=None,
+        description="For a vertex: how it was identified — by a key the text states "
+        "(``identity``, ``secondary``), by a known entity the model picked "
+        "(``candidate``), or by a key SchemaCast derived (``minted``).",
+    )
+    lane: str | None = Field(
+        default=None, description="For a picked entity: how the caller found it."
+    )

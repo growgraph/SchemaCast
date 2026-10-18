@@ -16,12 +16,15 @@ refs differently still mints new vertices for assigned and blank types.
 A mention (``mention: true``) is never written as a vertex. Edges reach it by
 its primary identity, or — when the text gave only a secondary identity — are
 held as *pending* until the write looks the primary identity up.
+
+A vertex the model picked from the episode's known entities takes that
+entity's key, whatever its identity mode: it is the vertex the graph holds.
 """
 
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from graflo.architecture.graph_types.container import GraphContainer
 from graflo.architecture.graph_types.identifiers import EdgeId
@@ -65,11 +68,28 @@ class Resolution(BaseModel):
     groundings: list[Grounding] = Field(default_factory=list)
 
 
+ResolvedBy = Literal["identity", "secondary", "candidate", "minted"]
+
+
+def _resolved_by(vertex: Vertex, valid: ValidVertex) -> ResolvedBy:
+    if valid.candidate_key is not None:
+        return "candidate"
+    if valid.mention:
+        found = mention_identity(vertex, valid.props)
+        return (
+            "identity" if found is not None and found[0] == "identity" else "secondary"
+        )
+    return "identity" if vertex.identity_mode in ("natural", "hash") else "minted"
+
+
 def _endpoint(
     vertex: Vertex, valid: ValidVertex, slice_: Schema, source_id: str
 ) -> Endpoint:
     mode = vertex.identity_mode
     key = vertex.identity[0] if vertex.identity else "id"
+    if valid.candidate_key is not None:
+        # A picked entity is written under the key the graph already holds.
+        return Endpoint(vertex=vertex.name, identity=dict(valid.candidate_key))
     if valid.mention:
         found = mention_identity(vertex, valid.props)
         assert found is not None, "validation admits only identifiable mentions"
@@ -163,6 +183,8 @@ def resolve(
                 model=model,
                 ref=ref,
                 kind="vertex",
+                resolved_by=_resolved_by(vertex, valid),
+                lane=valid.lane,
                 **target,
             )
         )

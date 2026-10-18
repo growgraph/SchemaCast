@@ -7,8 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Known entities:** `Episode.candidates` lists existing vertices a text may name; the reply may
+  pick one per vertex by `cid`, checked without the model (`candidate_rejected` otherwise), and a
+  picked vertex takes the entity's key. `schemacast cast --known FILE` gives candidates to every
+  episode without its own; `POST /cast` takes them on each episode.
+- Vertex groundings carry `resolved_by` (`identity`, `secondary`, `candidate`, `minted`) and, for a
+  pick, the candidate's `lane`.
+
 ### Changed
 
+- **A mention with no key is unresolved**, not an `identity_insufficient` finding: never written,
+  not repaired, listed in `unresolved.jsonl` (and `unresolved` in `POST /cast`) with the edges it
+  holds back. Output format version 3.
 - **Renamed from `lpgcast` to `schemacast`**: the distribution, the import package, the CLI
   (`schemacast`, `schemacast-bench`), `SchemaCaster` and `SchemaCastSettings`, the
   `SCHEMACAST_` environment prefixes and the default cache directory. The `text2lpg` alias is gone.
