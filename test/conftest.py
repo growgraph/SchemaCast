@@ -13,8 +13,8 @@ from typing import Any
 import httpx
 import pytest
 
-from lpgcast.config import CacheSettings, LLMSettings
-from lpgcast.llm import LLMCache, LLMClient
+from schemacast.config import CacheSettings, LLMSettings
+from schemacast.llm import LLMCache, LLMClient
 
 DATA = Path(__file__).parent / "data"
 
@@ -53,10 +53,10 @@ def pytest_collection_modifyitems(
 def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """No setting from the developer's shell, a cache per test, and no backoff sleeps."""
     for name in list(os.environ):
-        if name.startswith("LPGCAST_") or name in _SHELL_VARS:
+        if name.startswith("SCHEMACAST_") or name in _SHELL_VARS:
             monkeypatch.delenv(name)
-    monkeypatch.setenv("LPGCAST_CACHE_DIR", str(tmp_path / "cache"))
-    monkeypatch.setattr("lpgcast.llm.client.RETRY_BACKOFF_BASE_SECONDS", 0.0)
+    monkeypatch.setenv("SCHEMACAST_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setattr("schemacast.llm.client.RETRY_BACKOFF_BASE_SECONDS", 0.0)
 
 
 def completion(

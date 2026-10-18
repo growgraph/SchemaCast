@@ -1,25 +1,25 @@
 # The benchmark
 
-`lpgcast-bench` casts a corpus of short texts and scores the result against the graph each text
+`schemacast-bench` casts a corpus of short texts and scores the result against the graph each text
 states. No model judges: matching is exact.
 
 ```bash
-lpgcast-bench                              # the oracle row only; free
-lpgcast-bench --model gpt-5.6-luna         # plus a model row (LPGCAST_LLM_* settings)
-lpgcast-bench --split test --model a --model b
-lpgcast-bench --model a --replay           # from the cache; makes no request
-lpgcast-bench compare a.json b.json        # read run b against run a
+schemacast-bench                              # the oracle row only; free
+schemacast-bench --model gpt-5.6-luna         # plus a model row (SCHEMACAST_LLM_* settings)
+schemacast-bench --split test --model a --model b
+schemacast-bench --model a --replay           # from the cache; makes no request
+schemacast-bench compare a.json b.json        # read run b against run a
 ```
 
 Each run writes `<stamp>.json` (counts per episode, rates per case and row) and `<stamp>.md`
-under `--out` (default `bench-results/`, ignored by git). Set `LPGCAST_BENCH_PRICES` to a JSON
+under `--out` (default `bench-results/`, ignored by git). Set `SCHEMACAST_BENCH_PRICES` to a JSON
 file `{"<model>": {"input_per_1m": …, "output_per_1m": …}, "_source": "…"}` for a cost column;
 no prices ship with the package.
 
 ## Corpus
 
-`lpgcast/bench/cases/<family>/<instance>/` holds `case.yaml` (description, schema, and optionally `recast: true`
-or pinned `settings`), `episodes.jsonl` and `expected.yaml`. Schemas live in `lpgcast/bench/schemas/`; a case
+`schemacast/bench/cases/<family>/<instance>/` holds `case.yaml` (description, schema, and optionally `recast: true`
+or pinned `settings`), `episodes.jsonl` and `expected.yaml`. Schemas live in `schemacast/bench/schemas/`; a case
 naming several merges their vertices and edges. Each family isolates one failure mode in four
 domains:
 
@@ -51,7 +51,7 @@ comparable.
 
 - **oracle** replies with the expected graph through the whole pipeline. It is the ceiling the
   pipeline allows: what selection leaves out of the slice costs it too.
-- **a model** row per `--model`, against `LPGCAST_LLM_BASE_URL`.
+- **a model** row per `--model`, against `SCHEMACAST_LLM_BASE_URL`.
 
 ## Metrics
 
@@ -81,7 +81,7 @@ Values compare after coercion by their field; strings ignore case and runs of wh
 
 ## Comparing two runs
 
-`lpgcast-bench compare A.json B.json` reads run B against run A. Episodes pair on case and source
+`schemacast-bench compare A.json B.json` reads run B against run A. Episodes pair on case and source
 id, and only paired episodes count; the rest are listed. For each rate it gives A, B and B − A
 over the pooled counts, with a 95% paired bootstrap interval: episodes are resampled together
 with their pair, so an interval that spans zero says the corpus cannot tell the two runs apart.
@@ -96,5 +96,5 @@ when a report holds more than one model; `--json` also writes the comparison as 
 
 In a clone: write the three files under a new instance directory, add it to
 `SPLITS.yaml`, run `uv run pytest test/test_bench.py`, and set `CORPUS_DIGEST` in
-`lpgcast/bench/corpus.py` to the value the failing digest test prints, with a
+`schemacast/bench/corpus.py` to the value the failing digest test prints, with a
 new `CORPUS_VERSION`.

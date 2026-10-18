@@ -3,7 +3,7 @@
 import pytest
 from graflo.architecture.schema.vertex import Field
 
-from lpgcast.fidelity import value_mismatch
+from schemacast.fidelity import value_mismatch
 
 FLOAT = Field(name="power", type="FLOAT")
 INT = Field(name="count", type="INT")

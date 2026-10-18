@@ -1,4 +1,4 @@
-"""``lpgcast-bench``: cast the corpus and score it, or compare two runs."""
+"""``schemacast-bench``: cast the corpus and score it, or compare two runs."""
 
 from __future__ import annotations
 
@@ -8,14 +8,14 @@ from pathlib import Path
 
 import click
 
-from lpgcast.bench.compare import CompareError, compare, load_report
-from lpgcast.bench.compare import to_markdown as compare_markdown
-from lpgcast.bench.corpus import CORPUS_VERSION, BenchCase, load_corpus
-from lpgcast.bench.report import to_markdown, write_report
-from lpgcast.bench.run import Row, load_prices, new_report, run_row
-from lpgcast.config import LPGCastSettings
-from lpgcast.llm.cache import CacheMissError
-from lpgcast.llm.client import LLMConfigurationError
+from schemacast.bench.compare import CompareError, compare, load_report
+from schemacast.bench.compare import to_markdown as compare_markdown
+from schemacast.bench.corpus import CORPUS_VERSION, BenchCase, load_corpus
+from schemacast.bench.report import to_markdown, write_report
+from schemacast.bench.run import Row, load_prices, new_report, run_row
+from schemacast.config import SchemaCastSettings
+from schemacast.llm.cache import CacheMissError
+from schemacast.llm.client import LLMConfigurationError
 
 
 def select_cases(
@@ -48,7 +48,7 @@ class _RunByDefault(click.Group):
 def main() -> None:
     """Benchmark text-to-graph casting against the bundled corpus.
 
-    Without a subcommand, `run` is meant: `lpgcast-bench --model NAME`.
+    Without a subcommand, `run` is meant: `schemacast-bench --model NAME`.
     """
 
 
@@ -58,7 +58,7 @@ def main() -> None:
     "models",
     multiple=True,
     metavar="NAME",
-    help="Model to benchmark, repeatable; the endpoint is LPGCAST_LLM_BASE_URL. "
+    help="Model to benchmark, repeatable; the endpoint is SCHEMACAST_LLM_BASE_URL. "
     "Without it only the free oracle row runs.",
 )
 @click.option(
@@ -103,7 +103,7 @@ def run(
     concurrency: int,
 ) -> None:
     """Cast and score the corpus; write JSON and Markdown reports."""
-    settings = LPGCastSettings()
+    settings = SchemaCastSettings()
     if replay:
         settings.cache = settings.cache.model_copy(update={"require_hit": True})
     names = list(models)

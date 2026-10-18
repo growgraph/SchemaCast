@@ -23,14 +23,14 @@ from typing import TYPE_CHECKING, Any, Literal, TypedDict
 import openai
 from pydantic import BaseModel, Field
 
-from lpgcast.config import LLMSettings, LPGCastSettings
-from lpgcast.llm.cache import CachedResponse, CacheMissError, LLMCache, cache_key
-from lpgcast.llm.jsonparse import (
+from schemacast.config import LLMSettings, SchemaCastSettings
+from schemacast.llm.cache import CachedResponse, CacheMissError, LLMCache, cache_key
+from schemacast.llm.jsonparse import (
     LLMJsonParseError,
     feedback_excerpt,
     parse_json_object,
 )
-from lpgcast.llm.usage import (
+from schemacast.llm.usage import (
     TokenUsage,
     UsageTracker,
     active_tracker,
@@ -219,7 +219,10 @@ class LLMClient:
 
     @classmethod
     def from_settings(
-        cls, settings: LPGCastSettings, *, http_client: httpx.AsyncClient | None = None
+        cls,
+        settings: SchemaCastSettings,
+        *,
+        http_client: httpx.AsyncClient | None = None,
     ) -> LLMClient:
         """Build a client and its cache from top-level settings."""
         return cls(settings.llm, LLMCache(settings.cache), http_client=http_client)
@@ -242,7 +245,7 @@ class LLMClient:
             key = self.settings.api_key
             if key is None or not key.get_secret_value():
                 raise LLMConfigurationError(
-                    "No API key: set LPGCAST_LLM_API_KEY (any value for a local "
+                    "No API key: set SCHEMACAST_LLM_API_KEY (any value for a local "
                     "endpoint). Without one only cached responses are served."
                 )
             self._provider_client = openai.AsyncOpenAI(
@@ -397,7 +400,7 @@ class LLMClient:
         backoff_attempt: int = 0,
     ) -> tuple[CachedResponse, bool]:
         if not self.settings.model:
-            raise LLMConfigurationError("No model: set LPGCAST_LLM_MODEL.")
+            raise LLMConfigurationError("No model: set SCHEMACAST_LLM_MODEL.")
         key = cache_key(messages, json_schema, self.settings)
         hit = await self.cache.aget(key)
         if hit is not None:

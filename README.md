@@ -1,20 +1,20 @@
-# LPGCast <img src="https://raw.githubusercontent.com/growgraph/LPGCast/refs/heads/main/docs/assets/logo.png" alt="LPGCast logo" height="32" width="32"/>
+# SchemaCast <img src="https://raw.githubusercontent.com/growgraph/SchemaCast/refs/heads/main/docs/assets/logo.png" alt="SchemaCast logo" height="32" width="32"/>
 
 **Short texts in, a labeled property graph out, typed by a GraFlo schema you govern.**
 
-[![tests](https://img.shields.io/github/actions/workflow/status/growgraph/LPGCast/tests.yml?branch=main&label=tests)](https://github.com/growgraph/LPGCast/actions/workflows/tests.yml)
-[![pre-commit](https://img.shields.io/github/actions/workflow/status/growgraph/LPGCast/pre-commit.yml?branch=main&label=pre-commit)](https://github.com/growgraph/LPGCast/actions/workflows/pre-commit.yml)
-[![PyPI](https://img.shields.io/pypi/v/lpgcast?color=224777)](https://pypi.org/project/lpgcast/)
-[![Python](https://img.shields.io/pypi/pyversions/lpgcast?color=224777)](https://pypi.org/project/lpgcast/)
-[![Docs](https://img.shields.io/badge/docs-growgraph.github.io-224777)](https://growgraph.github.io/LPGCast/)
-[![License](https://img.shields.io/badge/license-Apache--2.0-224777)](https://github.com/growgraph/LPGCast/blob/main/LICENSE)
+[![tests](https://img.shields.io/github/actions/workflow/status/growgraph/SchemaCast/tests.yml?branch=main&label=tests)](https://github.com/growgraph/SchemaCast/actions/workflows/tests.yml)
+[![pre-commit](https://img.shields.io/github/actions/workflow/status/growgraph/SchemaCast/pre-commit.yml?branch=main&label=pre-commit)](https://github.com/growgraph/SchemaCast/actions/workflows/pre-commit.yml)
+[![PyPI](https://img.shields.io/pypi/v/schemacast?color=224777)](https://pypi.org/project/schemacast/)
+[![Python](https://img.shields.io/pypi/pyversions/schemacast?color=224777)](https://pypi.org/project/schemacast/)
+[![Docs](https://img.shields.io/badge/docs-growgraph.github.io-224777)](https://growgraph.github.io/SchemaCast/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-224777)](https://github.com/growgraph/SchemaCast/blob/main/LICENSE)
 
-LPGCast reads messages, tickets and notes, and writes what they state as vertices and edges of a
+SchemaCast reads messages, tickets and notes, and writes what they state as vertices and edges of a
 [GraFlo](https://github.com/growgraph/graflo) schema. Each text gets one model call, checked
 against the schema; what fails is corrected at most twice, then quarantined. Every vertex, edge
 and property keeps the quote it was read from.
 
-OntoCast builds and evolves an ontology from documents and writes RDF; LPGCast casts short,
+OntoCast builds and evolves an ontology from documents and writes RDF; SchemaCast casts short,
 frequent texts into a property-graph schema you already govern.
 
 **Status: alpha.** The API may change between minor releases.
@@ -22,27 +22,27 @@ frequent texts into a property-graph schema you already govern.
 ## Quick start
 
 ```bash
-uv add lpgcast        # or: pip install lpgcast
+uv add schemacast        # or: pip install schemacast
 ```
 
 Point it at any OpenAI-compatible endpoint:
 
 ```bash
 # OpenAI (the default model is gpt-5.6-luna)
-export LPGCAST_LLM_API_KEY=sk-...
+export SCHEMACAST_LLM_API_KEY=sk-...
 
 # or Ollama
-export LPGCAST_LLM_BASE_URL=http://localhost:11434/v1
-export LPGCAST_LLM_MODEL=qwen3:8b
-export LPGCAST_LLM_API_KEY=local
+export SCHEMACAST_LLM_BASE_URL=http://localhost:11434/v1
+export SCHEMACAST_LLM_MODEL=qwen3:8b
+export SCHEMACAST_LLM_API_KEY=local
 ```
 
-Then, from a clone of the repository, with the example in [`examples/tickets/`](https://github.com/growgraph/LPGCast/tree/main/examples/tickets):
+Then, from a clone of the repository, with the example in [`examples/tickets/`](https://github.com/growgraph/SchemaCast/tree/main/examples/tickets):
 
 ```bash
-lpgcast sheet  --schema examples/tickets/schema.yaml        # what the model is shown; no call
-lpgcast select --schema examples/tickets/schema.yaml --episodes examples/tickets/episodes.jsonl
-lpgcast cast   --schema examples/tickets/schema.yaml --episodes examples/tickets/episodes.jsonl \
+schemacast sheet  --schema examples/tickets/schema.yaml        # what the model is shown; no call
+schemacast select --schema examples/tickets/schema.yaml --episodes examples/tickets/episodes.jsonl
+schemacast cast   --schema examples/tickets/schema.yaml --episodes examples/tickets/episodes.jsonl \
                --out out/tickets [--db examples/connections/neo4j.yaml] [--replay]
 ```
 
@@ -56,11 +56,11 @@ From Python:
 
 ```python
 import asyncio
-from lpgcast import LPGCaster, load_schema, read_episodes
+from schemacast import SchemaCaster, load_schema, read_episodes
 
 schema = load_schema("examples/tickets/schema.yaml")
 result = asyncio.run(
-    LPGCaster(schema).cast(read_episodes("examples/tickets/episodes.jsonl"))
+    SchemaCaster(schema).cast(read_episodes("examples/tickets/episodes.jsonl"))
 )
 ```
 
@@ -71,18 +71,18 @@ cast twice changes nothing in a database that upserts.
 
 ## Benchmark
 
-`lpgcast-bench` casts a bundled corpus of texts whose graphs are known and scores the result
+`schemacast-bench` casts a bundled corpus of texts whose graphs are known and scores the result
 exactly, with no model as judge: conformance, hallucination, precision and recall, direction,
 spans, mention versus mint, injection, selection and re-cast stability, with tokens and cost.
 
 ## Not yet
 
 **Registry mode** is planned: selection across the schemas of a GraFlo schema registry, and an
-HTTP service. Today LPGCast works on one schema file.
+HTTP service. Today SchemaCast works on one schema file.
 
 ## Documentation
 
-[growgraph.github.io/LPGCast](https://growgraph.github.io/LPGCast/): installation, how a cast
+[growgraph.github.io/SchemaCast](https://growgraph.github.io/SchemaCast/): installation, how a cast
 works, identities and mentions, preparing a schema, replay, writing to a database, the benchmark,
 and the reference.
 

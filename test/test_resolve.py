@@ -6,11 +6,11 @@ import pytest
 from conftest import DATA
 from graflo.architecture.schema.identity_digest import compute_vertex_identity
 
-from lpgcast.episode import Episode
-from lpgcast.extract import WireExtraction
-from lpgcast.resolve import merge_containers, mint_id, resolve
-from lpgcast.schema_io import load_schema
-from lpgcast.validate import validate
+from schemacast.episode import Episode
+from schemacast.extract import WireExtraction
+from schemacast.resolve import merge_containers, mint_id, resolve
+from schemacast.schema_io import load_schema
+from schemacast.validate import validate
 
 TEXT = (
     "Ann (ann@x.com) operates press S-7. Sensor T-1 is on S-7. "
@@ -77,7 +77,7 @@ def _resolve(plant, reply=REPLY, source_id="msg-1"):
     episode = Episode(text=TEXT, source_id=source_id)
     validation = validate(WireExtraction.model_validate(reply), plant, TEXT)
     assert validation.findings == []
-    return resolve(validation, plant, episode, extractor="lpgcast/test", model="m")
+    return resolve(validation, plant, episode, extractor="schemacast/test", model="m")
 
 
 def test_vertex_documents_carry_their_keys(plant):
@@ -147,7 +147,7 @@ def test_every_assertion_is_grounded_at_its_quote(plant):
     for grounding in groundings:
         assert TEXT[grounding.char_start : grounding.char_end] == grounding.quote
         assert grounding.schema_ref == "plant@2.0.0"
-        assert grounding.extractor == "lpgcast/test"
+        assert grounding.extractor == "schemacast/test"
     edge = next(g for g in groundings if g.kind == "edge" and g.edge[0] == "Sensor")
     assert edge.target_identity == {"serial": "S-7"}
 

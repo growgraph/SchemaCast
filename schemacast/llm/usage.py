@@ -30,7 +30,7 @@ class TokenUsage(BaseModel):
         default=None,
         description=(
             "Prompt tokens served from the provider's prompt cache, counted "
-            "inside input_tokens. Unrelated to LPGCast's response cache."
+            "inside input_tokens. Unrelated to SchemaCast's response cache."
         ),
     )
 
@@ -131,7 +131,7 @@ class UsageTracker(BaseModel):
 
 
 _active_tracker: ContextVar[UsageTracker | None] = ContextVar(
-    "lpgcast_active_usage_tracker", default=None
+    "schemacast_active_usage_tracker", default=None
 )
 
 

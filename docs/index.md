@@ -7,9 +7,9 @@ hide:
 <div class="lc-hero" markdown>
 <div class="lc-hero__text" markdown>
 
-# LPGCast
+# SchemaCast
 
-LPGCast reads short texts — messages, tickets, notes — and writes what they
+SchemaCast reads short texts — messages, tickets, notes — and writes what they
 state as a labeled property graph, typed by a GraFlo schema you govern.
 { .lc-lead }
 
@@ -20,7 +20,7 @@ and property keeps the quote it was read from.
 It is for teams that already have a schema and want text to land in it.
 
 ```bash
-uv add lpgcast
+uv add schemacast
 ```
 
 [Quick start](getting_started/quickstart.md){ .md-button .md-button--primary }
@@ -75,7 +75,7 @@ uv add lpgcast
 </div>
 
 !!! note "Early development"
-    LPGCast is on PyPI (`pip install lpgcast`) and its API may still change; see
+    SchemaCast is on PyPI (`pip install schemacast`) and its API may still change; see
     [Installation](getting_started/installation.md).
 
 ## What it does

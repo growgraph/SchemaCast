@@ -1,4 +1,4 @@
-"""LPGCast stays light: six runtime dependencies and a small import footprint."""
+"""SchemaCast stays light: six runtime dependencies and a small import footprint."""
 
 import re
 import subprocess
@@ -7,11 +7,11 @@ from importlib.metadata import distributions, requires
 
 RUNTIME = {"click", "graflo", "openai", "pydantic", "pydantic-settings", "pyyaml"}
 
-#: Never installed alongside LPGCast.
+#: Never installed alongside SchemaCast.
 NOT_INSTALLED = ("langchain", "langgraph", "torch")
 
-#: Never loaded by importing LPGCast. graflo installs some of these for its own
-#: database and RDF features; LPGCast's import path must not reach them.
+#: Never loaded by importing SchemaCast. graflo installs some of these for its own
+#: database and RDF features; SchemaCast's import path must not reach them.
 NOT_IMPORTED = (
     "langchain",
     "langchain_core",
@@ -30,7 +30,7 @@ def _name(requirement: str) -> str:
 
 def test_declares_exactly_the_runtime_dependencies():
     declared = {
-        _name(req) for req in requires("lpgcast") or [] if "extra ==" not in req
+        _name(req) for req in requires("schemacast") or [] if "extra ==" not in req
     }
     assert declared == RUNTIME
 
@@ -49,11 +49,11 @@ def test_heavy_frameworks_are_not_installed():
 
 def test_import_loads_nothing_heavy():
     probe = (
-        "import sys, lpgcast, lpgcast.cli, lpgcast.config, lpgcast.llm, lpgcast.episode, "
-        "lpgcast.select, lpgcast.prompt, lpgcast.extract, lpgcast.validate, lpgcast.repair, "
-        "lpgcast.resolve, lpgcast.ground, lpgcast.sink, lpgcast.cast, lpgcast.output, lpgcast.write, "
-        "lpgcast.schema_io, lpgcast.bench.cli, lpgcast.bench.corpus, lpgcast.bench.score, "
-        "lpgcast.bench.oracle, lpgcast.bench.run, lpgcast.bench.report\n"
+        "import sys, schemacast, schemacast.cli, schemacast.config, schemacast.llm, schemacast.episode, "
+        "schemacast.select, schemacast.prompt, schemacast.extract, schemacast.validate, schemacast.repair, "
+        "schemacast.resolve, schemacast.ground, schemacast.sink, schemacast.cast, schemacast.output, schemacast.write, "
+        "schemacast.schema_io, schemacast.bench.cli, schemacast.bench.corpus, schemacast.bench.score, "
+        "schemacast.bench.oracle, schemacast.bench.run, schemacast.bench.report\n"
         f"print(','.join(m for m in {NOT_IMPORTED!r} if m in sys.modules))"
     )
     loaded = subprocess.run(
@@ -64,10 +64,10 @@ def test_import_loads_nothing_heavy():
 
 def test_the_top_level_names_resolve_lazily():
     probe = (
-        "import sys, lpgcast\n"
-        "assert 'lpgcast.cast' not in sys.modules\n"
-        "from lpgcast import LPGCaster, load_schema, read_episodes, write_cast\n"
-        "assert 'lpgcast.cast' in sys.modules\n"
+        "import sys, schemacast\n"
+        "assert 'schemacast.cast' not in sys.modules\n"
+        "from schemacast import SchemaCaster, load_schema, read_episodes, write_cast\n"
+        "assert 'schemacast.cast' in sys.modules\n"
         "print(','.join(m for m in "
         f"{NOT_IMPORTED!r} if m in sys.modules))"
     )
@@ -78,8 +78,8 @@ def test_the_top_level_names_resolve_lazily():
 
 
 def test_every_lazy_name_is_exported_and_resolves():
-    import lpgcast
+    import schemacast
 
-    assert set(lpgcast.__all__) == {"__version__", *lpgcast._EXPORTS}
-    for name in lpgcast._EXPORTS:
-        assert getattr(lpgcast, name) is not None
+    assert set(schemacast.__all__) == {"__version__", *schemacast._EXPORTS}
+    for name in schemacast._EXPORTS:
+        assert getattr(schemacast, name) is not None

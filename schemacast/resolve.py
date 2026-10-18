@@ -31,11 +31,11 @@ from graflo.architecture.schema.identity_digest import compute_vertex_identity
 from graflo.architecture.schema.vertex import Vertex
 from pydantic import BaseModel, ConfigDict, Field
 
-from lpgcast.episode import Episode
-from lpgcast.ground import Grounding, Span
-from lpgcast.validate import Validation, ValidVertex, mention_identity
+from schemacast.episode import Episode
+from schemacast.ground import Grounding, Span
+from schemacast.validate import Validation, ValidVertex, mention_identity
 
-#: Namespace of LPGCast's derived UUIDs. Never change it: every assigned and
+#: Namespace of SchemaCast's derived UUIDs. Never change it: every assigned and
 #: blank key ever minted depends on it.
 MINT_NAMESPACE = uuid.UUID("6f1c3a52-6a51-4f8e-9e0e-2b8c1d7a4e10")
 

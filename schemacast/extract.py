@@ -14,9 +14,9 @@ from graflo.architecture.schema.context import instance_json_schema
 from graflo.architecture.schema.document import Schema
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from lpgcast.episode import Episode
-from lpgcast.llm.client import JsonCompletion, LLMClient
-from lpgcast.prompt import build_messages
+from schemacast.episode import Episode
+from schemacast.llm.client import JsonCompletion, LLMClient
+from schemacast.prompt import build_messages
 
 #: JSON Schema name sent with strict output requests.
 INSTANCE_SCHEMA_NAME = "lpg_instance"

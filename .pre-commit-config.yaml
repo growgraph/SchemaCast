@@ -8,10 +8,10 @@ repos:
     -   id: check-added-large-files
         args: [--maxkb=2000]
     -   id: end-of-file-fixer
-        exclude: (^|/)(\.env|data/)|^lpgcast/plot/fonts/|\.svg$
+        exclude: (^|/)(\.env|data/)|^schemacast/plot/fonts/|\.svg$
     -   id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
-        exclude: (^|/)(\.env|data/)|^lpgcast/plot/fonts/|\.svg$
+        exclude: (^|/)(\.env|data/)|^schemacast/plot/fonts/|\.svg$
     -   id: pretty-format-json
         args: [--autofix, --indent, '4', --no-sort-keys]
 
@@ -28,7 +28,7 @@ repos:
     # Type checking
     -   id: ty
         name: ty check
-        entry: uv run --frozen ty check lpgcast test
+        entry: uv run --frozen ty check schemacast test
         language: system
         types: [python]
         pass_filenames: false

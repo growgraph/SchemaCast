@@ -1,8 +1,8 @@
 # Preparing a schema
 
-LPGCast casts into a graflo `Schema`, or the schema block of a `GraphManifest`,
+SchemaCast casts into a graflo `Schema`, or the schema block of a `GraphManifest`,
 in YAML or JSON. Anything graflo accepts works; a few things decide how well a
-model reads it. Check the result with `lpgcast sheet --schema schema.yaml`:
+model reads it. Check the result with `schemacast sheet --schema schema.yaml`:
 that is everything the model sees.
 
 ## Describe types in the reader's words
@@ -47,10 +47,10 @@ unit, so the model knows what to expect. The model writes numbers plain
 
 ## Large schemas
 
-A schema over the slice budget (`LPGCAST_SLICE_MAX_ELEMENTS`,
-`LPGCAST_SLICE_MAX_TOKENS`) is cut down per text: the types the text matches
+A schema over the slice budget (`SCHEMACAST_SLICE_MAX_ELEMENTS`,
+`SCHEMACAST_SLICE_MAX_TOKENS`) is cut down per text: the types the text matches
 are seeds, and graflo's `subschema()` closes them into a valid slice, never
-dropping an identity field. `lpgcast select --episodes episodes.jsonl` shows
+dropping an identity field. `schemacast select --episodes episodes.jsonl` shows
 each slice and its seeds without calling a model. A text that matches nothing
 in a large schema is quarantined as `selection_no_match` rather than cast
 against the whole schema.

@@ -2,7 +2,7 @@
 
 import pytest
 
-from lpgcast.llm.jsonparse import (
+from schemacast.llm.jsonparse import (
     LLMJsonParseError,
     feedback_excerpt,
     parse_json_object,

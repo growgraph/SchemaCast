@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import json
 
-from lpgcast.llm.client import ChatMessage
-from lpgcast.validate import FINDING_ORDER, Finding, FindingKind
+from schemacast.llm.client import ChatMessage
+from schemacast.validate import FINDING_ORDER, Finding, FindingKind
 
 GUIDANCE: dict[FindingKind, str] = {
     "unknown_type": "Use only types listed under TYPES. If no type fits, move the item to `unmapped`.",

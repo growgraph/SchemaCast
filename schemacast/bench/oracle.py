@@ -14,10 +14,10 @@ from typing import Any
 
 import httpx
 
-from lpgcast.bench.corpus import ExpectedEpisode, ExpectedProp
-from lpgcast.config import CacheSettings, LLMSettings
-from lpgcast.llm.cache import LLMCache
-from lpgcast.llm.client import LLMClient
+from schemacast.bench.corpus import ExpectedEpisode, ExpectedProp
+from schemacast.config import CacheSettings, LLMSettings
+from schemacast.llm.cache import LLMCache
+from schemacast.llm.client import LLMClient
 
 ORACLE = "oracle"
 

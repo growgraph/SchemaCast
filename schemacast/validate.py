@@ -29,10 +29,10 @@ from graflo.architecture.schema.vertex import Field as SchemaField
 from graflo.architecture.schema.vertex import Vertex
 from pydantic import BaseModel, Field
 
-from lpgcast.episode import ContextItem
-from lpgcast.extract import WireExtraction, WireProp
-from lpgcast.fidelity import value_mismatch
-from lpgcast.ground import Span, locate
+from schemacast.episode import ContextItem
+from schemacast.extract import WireExtraction, WireProp
+from schemacast.fidelity import value_mismatch
+from schemacast.ground import Span, locate
 
 FindingKind = Literal[
     "duplicate_ref",

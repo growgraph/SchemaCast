@@ -2,7 +2,7 @@
 
 One table per settings class, one row per field: the environment variable, its
 default and its description. Generated, never written to disk, so it cannot
-drift from ``lpgcast/config.py``.
+drift from ``schemacast/config.py``.
 """
 
 from typing import Any
@@ -10,13 +10,13 @@ from typing import Any
 import mkdocs_gen_files
 from pydantic_settings import BaseSettings
 
-from lpgcast.config import CacheSettings, LLMSettings, LPGCastSettings, ServeSettings
+from schemacast.config import CacheSettings, LLMSettings, SchemaCastSettings, ServeSettings
 
 SECTIONS: list[tuple[str, type[BaseSettings], str]] = [
-    ("Model", LLMSettings, "LPGCAST_LLM_"),
-    ("Response cache", CacheSettings, "LPGCAST_CACHE_"),
-    ("Cast", LPGCastSettings, "LPGCAST_"),
-    ("Service", ServeSettings, "LPGCAST_SERVE_"),
+    ("Model", LLMSettings, "SCHEMACAST_LLM_"),
+    ("Response cache", CacheSettings, "SCHEMACAST_CACHE_"),
+    ("Cast", SchemaCastSettings, "SCHEMACAST_"),
+    ("Service", ServeSettings, "SCHEMACAST_SERVE_"),
 ]
 
 
@@ -36,7 +36,7 @@ lines = [
     "# Settings",
     "",
     "Settings are read from environment variables only; no file is loaded. In",
-    "Python, pass `LPGCastSettings(...)` to `LPGCaster` instead.",
+    "Python, pass `SchemaCastSettings(...)` to `SchemaCaster` instead.",
     "",
 ]
 for title, model, prefix in SECTIONS:

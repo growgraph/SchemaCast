@@ -3,9 +3,9 @@ selection runs on every text without a model."""
 
 from pathlib import Path
 
-from lpgcast.episode import read_episodes
-from lpgcast.schema_io import load_schema
-from lpgcast.select import select
+from schemacast.episode import read_episodes
+from schemacast.schema_io import load_schema
+from schemacast.select import select
 
 EXAMPLES = Path(__file__).parents[1] / "examples"
 

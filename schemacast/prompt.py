@@ -18,8 +18,8 @@ import re
 from graflo.architecture.schema.context import render_type_sheet
 from graflo.architecture.schema.document import Schema
 
-from lpgcast.episode import Episode
-from lpgcast.llm.client import ChatMessage
+from schemacast.episode import Episode
+from schemacast.llm.client import ChatMessage
 
 PREAMBLE = """\
 # TASK

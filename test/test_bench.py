@@ -9,8 +9,8 @@ from typing import Any
 import pytest
 from click.testing import CliRunner
 
-from lpgcast.bench.cli import main as bench
-from lpgcast.bench.corpus import (
+from schemacast.bench.cli import main as bench
+from schemacast.bench.corpus import (
     CORPUS_DIGEST,
     CORPUS_VERSION,
     BenchCase,
@@ -18,14 +18,14 @@ from lpgcast.bench.corpus import (
     corpus_digest,
     load_corpus,
 )
-from lpgcast.bench.oracle import oracle_reply
-from lpgcast.bench.report import case_score, rates
-from lpgcast.bench.run import Row, run_row
-from lpgcast.bench.score import gold_vertices, score_episode, score_recast
-from lpgcast.cast import LPGCaster
-from lpgcast.config import CacheSettings, LPGCastSettings
-from lpgcast.ground import locate
-from lpgcast.validate import identity_fields, mention_identity
+from schemacast.bench.oracle import oracle_reply
+from schemacast.bench.report import case_score, rates
+from schemacast.bench.run import Row, run_row
+from schemacast.bench.score import gold_vertices, score_episode, score_recast
+from schemacast.cast import SchemaCaster
+from schemacast.config import CacheSettings, SchemaCastSettings
+from schemacast.ground import locate
+from schemacast.validate import identity_fields, mention_identity
 
 CORPUS = load_corpus()
 BY_NAME = {case.name: case for case in CORPUS}
@@ -89,7 +89,7 @@ def test_the_expected_graph_is_in_the_text(case: BenchCase):
                 assert gold.keys and gold.keys[0][0] == "id", handle
 
 
-def _run(cases: list[BenchCase], settings: LPGCastSettings, **kwargs: Any) -> Row:
+def _run(cases: list[BenchCase], settings: SchemaCastSettings, **kwargs: Any) -> Row:
     return asyncio.run(run_row(cases, settings, **kwargs))
 
 
@@ -97,7 +97,7 @@ def test_the_oracle_scores_perfectly_on_the_whole_schema():
     unbudgeted = [
         case.model_copy(update={"settings": CaseSettings()}) for case in CORPUS
     ]
-    settings = LPGCastSettings(slice_max_elements=None, slice_max_tokens=None)
+    settings = SchemaCastSettings(slice_max_elements=None, slice_max_tokens=None)
     row = _run(unbudgeted, settings, oracle=True)
     for case in row.cases:
         counts = case.counts
@@ -114,7 +114,7 @@ def test_the_oracle_scores_perfectly_on_the_whole_schema():
 
 
 def test_the_oracle_row_reads_selection_under_the_case_budget():
-    row = _run([BY_NAME["distractors/plant"]], LPGCastSettings(), oracle=True)
+    row = _run([BY_NAME["distractors/plant"]], SchemaCastSettings(), oracle=True)
     counts = row.counts
     assert counts.sliced == 2
     assert counts.gold_types == 4
@@ -126,7 +126,7 @@ def _expected_reply(case: BenchCase, source_id: str) -> dict[str, Any]:
 
 
 async def _cast_one(case: BenchCase, source_id: str, client: Any):
-    caster = LPGCaster(case.schema_, settings=LPGCastSettings(), client=client)
+    caster = SchemaCaster(case.schema_, settings=SchemaCastSettings(), client=client)
     episode = next(e for e in case.episodes if e.source_id == source_id)
     return await caster.cast_episode(episode), episode
 
@@ -293,7 +293,7 @@ def test_the_command_needs_a_row():
 
 
 def test_a_replay_miss_stops_the_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("LPGCAST_LLM_API_KEY", "test-key")
+    monkeypatch.setenv("SCHEMACAST_LLM_API_KEY", "test-key")
     result = CliRunner().invoke(
         bench,
         [

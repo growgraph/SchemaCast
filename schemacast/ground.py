@@ -1,6 +1,6 @@
 """Groundings: where in the text each assertion was read.
 
-The model copies a quote; LPGCast finds it in the episode and records the
+The model copies a quote; SchemaCast finds it in the episode and records the
 character offsets. Offsets are never taken from the model. A quote that cannot
 be found is a hallucination flag, handled by validation.
 """
@@ -153,7 +153,7 @@ class Grounding(BaseModel):
         "for the episode's own text. Only identity values ground in context.",
     )
     quote: str = Field(description="The text at the span, as it stands in the source.")
-    extractor: str = Field(description="``lpgcast/<version>``.")
+    extractor: str = Field(description="``schemacast/<version>``.")
     model: str | None = Field(
         default=None, description="Model that produced the reply."
     )

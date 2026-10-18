@@ -23,7 +23,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from lpgcast.cast import CastResult
+from schemacast.cast import CastResult
 
 QUARANTINE_FILE = "quarantine.jsonl"
 

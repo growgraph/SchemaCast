@@ -1,8 +1,8 @@
 """The typed repair prompt."""
 
-from lpgcast.llm.client import ChatMessage
-from lpgcast.repair import INTRO, repair_messages, repair_prompt
-from lpgcast.validate import Finding
+from schemacast.llm.client import ChatMessage
+from schemacast.repair import INTRO, repair_messages, repair_prompt
+from schemacast.validate import Finding
 
 
 def _finding(kind, path, **kwargs):

@@ -4,6 +4,10 @@ on:
     pull_request:
     push:
         branches: [main]
+    schedule:
+        # Daily: catches a new graflo release that breaks this package.
+    -   cron: '35 5 * * *'
+    workflow_dispatch:
 
 concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
@@ -35,7 +39,7 @@ jobs:
             run: |
                 /tmp/base-install/bin/python -c "
                 import sys
-                from lpgcast import LPGCaster, load_schema, read_episodes, write_cast
+                from schemacast import SchemaCaster, load_schema, read_episodes, write_cast
                 forbidden = ['langchain', 'langgraph', 'torch', 'numpy', 'pandas', 'rdflib']
                 leaked = [name for name in forbidden if name in sys.modules]
                 assert not leaked, f'imported on a plain install: {leaked}'
@@ -43,9 +47,9 @@ jobs:
                 "
         -   name: Console scripts resolve
             run: |
-                /tmp/base-install/bin/lpgcast --help
-                /tmp/base-install/bin/lpgcast-bench --help
-                /tmp/base-install/bin/lpgcast sheet --schema examples/tickets/schema.yaml > /dev/null
+                /tmp/base-install/bin/schemacast --help
+                /tmp/base-install/bin/schemacast-bench --help
+                /tmp/base-install/bin/schemacast sheet --schema examples/tickets/schema.yaml > /dev/null
 
     unit:
         runs-on: ubuntu-latest
@@ -67,10 +71,46 @@ jobs:
             run: uv sync --no-sources --group dev
         -   name: Type check
             if: matrix.python-version == '3.12'
-            run: uv run --no-sources ty check lpgcast test
+            run: uv run --no-sources ty check schemacast test
         # No model is called: tests use a scripted endpoint, and the `llm` and
         # `neo4j` markers are skipped without --run-llm / --run-neo4j.
         -   name: Run tests
             run: uv run --no-sources pytest
+            env:
+                PYTHONUNBUFFERED: '1'
+
+    # Both ends of the declared graflo range: the floor it promises to support
+    # and the newest release it admits. Not on PRs.
+    graflo-range:
+        if: github.event_name != 'pull_request'
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                graflo: [floor, latest]
+        env:
+            UV_PYTHON: '3.12'
+        steps:
+        -   uses: actions/checkout@v7
+        -   name: Install uv
+            uses: astral-sh/setup-uv@v10.2.0
+            with:
+                version: "0.12.21"
+                enable-cache: true
+        -   name: Install dependencies
+            run: uv sync --no-sources --group dev
+        -   name: Select graflo
+            run: |
+                range=$(sed -nE 's/^ *"(graflo>=[^"]+)",?$/\1/p' pyproject.toml)
+                floor=$(sed -nE 's/^ *"graflo>=([0-9.]+).*/\1/p' pyproject.toml)
+                test -n "$range" && test -n "$floor"
+                if [ "${{ matrix.graflo }}" = floor ]; then
+                    uv pip install --python .venv "graflo==$floor"
+                else
+                    uv pip install --python .venv --upgrade-package graflo "$range"
+                fi
+                uv run --no-sync python -c "import importlib.metadata as m; print('graflo', m.version('graflo'))"
+        -   name: Run tests
+            run: uv run --no-sync pytest
             env:
                 PYTHONUNBUFFERED: '1'

@@ -25,45 +25,45 @@ from graflo.architecture.schema.graflo_output import GraFloOutput
 from openai import APIError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from lpgcast import __version__
-from lpgcast.config import LPGCastSettings
-from lpgcast.episode import Episode
-from lpgcast.extract import (
+from schemacast import __version__
+from schemacast.config import SchemaCastSettings
+from schemacast.episode import Episode
+from schemacast.extract import (
     INSTANCE_SCHEMA_NAME,
     EpisodeTooLongError,
     WireExtraction,
     WireShapeError,
     extract,
 )
-from lpgcast.ground import Grounding
-from lpgcast.llm.cache import LLMCache, cache_key_config
-from lpgcast.llm.client import (
+from schemacast.ground import Grounding
+from schemacast.llm.cache import LLMCache, cache_key_config
+from schemacast.llm.client import (
     LLMClient,
     LLMRefusalError,
     LLMReplyError,
     LLMRequestTimeoutError,
     LLMTruncatedError,
 )
-from lpgcast.llm.jsonparse import LLMJsonParseError
-from lpgcast.llm.usage import UsageTracker, track_usage
-from lpgcast.prompt import build_messages
-from lpgcast.repair import repair_messages
-from lpgcast.resolve import (
+from schemacast.llm.jsonparse import LLMJsonParseError
+from schemacast.llm.usage import UsageTracker, track_usage
+from schemacast.prompt import build_messages
+from schemacast.repair import repair_messages
+from schemacast.resolve import (
     PendingEdge,
     Resolution,
     merge_containers,
     resolve,
     schema_ref,
 )
-from lpgcast.select import (
+from schemacast.select import (
     RetrievalMetrics,
     Selection,
     SelectionConfig,
     SelectionError,
     select,
 )
-from lpgcast.sink import MemoryQuarantineSink, QuarantineRecord, QuarantineSink
-from lpgcast.validate import Finding, Fix, Validation, validate
+from schemacast.sink import MemoryQuarantineSink, QuarantineRecord, QuarantineSink
+from schemacast.validate import Finding, Fix, Validation, validate
 
 #: Version of the files a cast writes; bumped when a record's meaning changes.
 OUTPUT_FORMAT_VERSION = 2
@@ -133,7 +133,7 @@ class EpisodeResult(BaseModel):
 class RunManifest(BaseModel):
     """How a cast was produced."""
 
-    lpgcast_version: str
+    schemacast_version: str
     graflo_version: str
     output_format_version: int = OUTPUT_FORMAT_VERSION
     schema_ref: str
@@ -190,10 +190,10 @@ class EpisodeOutcome(BaseModel):
 
 
 def _extractor() -> str:
-    return f"lpgcast/{__version__}"
+    return f"schemacast/{__version__}"
 
 
-class LPGCaster:
+class SchemaCaster:
     """Casts episodes into one governed schema.
 
     Args:
@@ -210,14 +210,14 @@ class LPGCaster:
         self,
         schema: Schema,
         *,
-        settings: LPGCastSettings | None = None,
+        settings: SchemaCastSettings | None = None,
         client: LLMClient | None = None,
         sink: QuarantineSink | None = None,
         selection: SelectionConfig | None = None,
         max_concurrent_episodes: int = 8,
     ) -> None:
         self.schema = schema
-        self.settings = settings or LPGCastSettings()
+        self.settings = settings or SchemaCastSettings()
         self.client = client or LLMClient(
             self.settings.llm, LLMCache(self.settings.cache)
         )
@@ -463,7 +463,7 @@ class LPGCaster:
         for result in results:
             status[result.status] += 1
         manifest = RunManifest(
-            lpgcast_version=__version__,
+            schemacast_version=__version__,
             graflo_version=version("graflo"),
             schema_ref=schema_ref(self.schema),
             model={

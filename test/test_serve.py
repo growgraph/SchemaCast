@@ -1,4 +1,4 @@
-"""``lpgcast serve``: POST /cast against a scripted model."""
+"""``schemacast serve``: POST /cast against a scripted model."""
 
 import subprocess
 import sys
@@ -9,8 +9,8 @@ from conftest import DATA
 from fastapi.testclient import TestClient
 from test_cast import ANN, ANN_REPLY, NOTE, NOTE_REPLY
 
-from lpgcast.config import LPGCastSettings, ServeSettings
-from lpgcast.serve import create_app
+from schemacast.config import SchemaCastSettings, ServeSettings
+from schemacast.serve import create_app
 
 KEY = "s3cret"
 AUTH = {"Authorization": f"Bearer {KEY}"}
@@ -30,7 +30,7 @@ def make_service(make_client):
     def _build(routes=None, serve=None, **client):
         llm, endpoint = make_client(routes=routes or {}, **client)
         app = create_app(
-            LPGCastSettings(),
+            SchemaCastSettings(),
             serve or ServeSettings(api_key=KEY),
             client=llm,
         )
@@ -74,7 +74,7 @@ def test_no_configured_key_fails_closed(make_service):
     service, endpoint = make_service(serve=ServeSettings())
     response = service.post("/cast", json=_body(ANN), headers=AUTH)
     assert response.status_code == 503
-    assert "LPGCAST_SERVE_API_KEY" in response.json()["detail"]
+    assert "SCHEMACAST_SERVE_API_KEY" in response.json()["detail"]
     assert endpoint.requests == []
 
 
@@ -121,7 +121,7 @@ def test_a_misconfigured_model_is_a_service_error(make_service):
 
 def test_importing_the_service_loads_nothing_heavy():
     probe = (
-        "import sys, lpgcast.serve\n"
+        "import sys, schemacast.serve\n"
         "print(','.join(m for m in ('numpy', 'pandas', 'rdflib', 'torch') "
         "if m in sys.modules))"
     )

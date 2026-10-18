@@ -1,8 +1,8 @@
-site_name: LPGCast
+site_name: SchemaCast
 site_description: Text to a labeled property graph, against a governed GraFlo schema
-site_url: https://growgraph.github.io/LPGCast
-repo_url: https://github.com/growgraph/LPGCast
-repo_name: growgraph/LPGCast
+site_url: https://growgraph.github.io/SchemaCast
+repo_url: https://github.com/growgraph/SchemaCast
+repo_name: growgraph/SchemaCast
 copyright: Copyright &copy; 2026 GrowGraph
 edit_uri: edit/main/docs/
 theme:
@@ -46,7 +46,7 @@ extra_css:
 exclude_docs: |
     _build/
 plugins:
-# Underscores are separators, so a setting such as `LPGCAST_CACHE_REQUIRE_HIT`
+# Underscores are separators, so a setting such as `SCHEMACAST_CACHE_REQUIRE_HIT`
 # is indexed as its words as well as whole.
 -   search:
         separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|_'

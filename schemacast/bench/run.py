@@ -12,27 +12,27 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from lpgcast import __version__
-from lpgcast.bench.corpus import (
+from schemacast import __version__
+from schemacast.bench.corpus import (
     CORPUS_DIGEST,
     CORPUS_VERSION,
     BenchCase,
     ExpectedEpisode,
     corpus_digest,
 )
-from lpgcast.bench.oracle import ORACLE, oracle_client
-from lpgcast.bench.score import Counts, score_episode, score_recast, total
-from lpgcast.cast import LPGCaster
-from lpgcast.config import LPGCastSettings
-from lpgcast.episode import Episode
-from lpgcast.llm.cache import LLMCache, cache_key_config, default_cache_dir
-from lpgcast.llm.client import LLMClient
-from lpgcast.llm.usage import track_usage
+from schemacast.bench.oracle import ORACLE, oracle_client
+from schemacast.bench.score import Counts, score_episode, score_recast, total
+from schemacast.cast import SchemaCaster
+from schemacast.config import SchemaCastSettings
+from schemacast.episode import Episode
+from schemacast.llm.cache import LLMCache, cache_key_config, default_cache_dir
+from schemacast.llm.client import LLMClient
+from schemacast.llm.usage import track_usage
 
 #: Environment variable naming a JSON price table:
 #: ``{"<model>": {"input_per_1m": 0.15, "output_per_1m": 0.6}}``; keys starting
 #: with ``_`` are comments. No prices ship with the package.
-PRICES_ENV = "LPGCAST_BENCH_PRICES"
+PRICES_ENV = "SCHEMACAST_BENCH_PRICES"
 
 #: The second cast of a re-cast case is cached here, beside the first, so a
 #: replay of the benchmark repeats both without a request.
@@ -89,7 +89,7 @@ class BenchReport(BaseModel):
         description="The cases differ from the pinned digest: not publishable."
     )
     split: str
-    lpgcast_version: str = __version__
+    schemacast_version: str = __version__
     graflo_version: str = Field(default_factory=lambda: version("graflo"))
     started: str
     prices_source: str | None = None
@@ -122,26 +122,26 @@ def price(counts: Counts, entry: dict[str, float] | None) -> float | None:
     ) / 1_000_000
 
 
-def case_settings(case: BenchCase, base: LPGCastSettings) -> LPGCastSettings:
+def case_settings(case: BenchCase, base: SchemaCastSettings) -> SchemaCastSettings:
     """*base* with the settings *case* pins."""
     pinned = case.settings.model_dump(include=case.settings.model_fields_set)
     return base.model_copy(update=pinned)
 
 
-def recast_settings(base: LPGCastSettings) -> LPGCastSettings:
+def recast_settings(base: SchemaCastSettings) -> SchemaCastSettings:
     """*base* with its own cache directory, so the second cast makes a fresh call."""
     root = base.cache.dir or default_cache_dir()
     cache = base.cache.model_copy(update={"dir": root / RECAST_CACHE_SUBDIR})
     return base.model_copy(update={"cache": cache})
 
 
-ClientFactory = Callable[[BenchCase, LPGCastSettings], LLMClient]
+ClientFactory = Callable[[BenchCase, SchemaCastSettings], LLMClient]
 
 
-def model_clients(settings: LPGCastSettings) -> ClientFactory:
+def model_clients(settings: SchemaCastSettings) -> ClientFactory:
     """Clients for the configured model, one cache per settings."""
 
-    def build(_case: BenchCase, case_settings_: LPGCastSettings) -> LLMClient:
+    def build(_case: BenchCase, case_settings_: SchemaCastSettings) -> LLMClient:
         return LLMClient(case_settings_.llm, LLMCache(case_settings_.cache))
 
     return build
@@ -150,15 +150,15 @@ def model_clients(settings: LPGCastSettings) -> ClientFactory:
 def oracle_clients() -> ClientFactory:
     """Oracle clients, scripted per case."""
 
-    def build(case: BenchCase, _settings: LPGCastSettings) -> LLMClient:
+    def build(case: BenchCase, _settings: SchemaCastSettings) -> LLMClient:
         return oracle_client(case.expected)
 
     return build
 
 
 async def _episode(
-    caster: LPGCaster,
-    recaster: LPGCaster | None,
+    caster: SchemaCaster,
+    recaster: SchemaCaster | None,
     episode: Episode,
     expected: ExpectedEpisode,
     case: BenchCase,
@@ -193,7 +193,7 @@ async def _episode(
 
 async def run_case(
     case: BenchCase,
-    settings: LPGCastSettings,
+    settings: SchemaCastSettings,
     clients: ClientFactory,
     *,
     concurrency: int = 8,
@@ -205,11 +205,13 @@ async def run_case(
         CacheMissError: a miss while the cache requires hits.
     """
     pinned = case_settings(case, settings)
-    caster = LPGCaster(case.schema_, settings=pinned, client=clients(case, pinned))
+    caster = SchemaCaster(case.schema_, settings=pinned, client=clients(case, pinned))
     recaster = None
     if case.recast:
         again = recast_settings(pinned)
-        recaster = LPGCaster(case.schema_, settings=again, client=clients(case, again))
+        recaster = SchemaCaster(
+            case.schema_, settings=again, client=clients(case, again)
+        )
     gate = asyncio.Semaphore(max(1, concurrency))
     try:
         async with asyncio.TaskGroup() as group:
@@ -242,7 +244,7 @@ async def run_case(
 
 async def run_row(
     cases: list[BenchCase],
-    settings: LPGCastSettings,
+    settings: SchemaCastSettings,
     *,
     oracle: bool = False,
     concurrency: int = 8,

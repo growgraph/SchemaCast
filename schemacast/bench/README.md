@@ -1,7 +1,7 @@
 # Benchmark corpus
 
-The cases and schemas `lpgcast-bench` scores against. How the benchmark works, what it
-measures and how to run it: the [benchmark guide](https://growgraph.github.io/LPGCast/guides/benchmark/)
+The cases and schemas `schemacast-bench` scores against. How the benchmark works, what it
+measures and how to run it: the [benchmark guide](https://growgraph.github.io/SchemaCast/guides/benchmark/)
 (`docs/guides/benchmark.md` in this repository).
 
 ## Adding a case

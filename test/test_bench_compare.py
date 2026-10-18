@@ -8,17 +8,17 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from lpgcast.bench.cli import main as bench
-from lpgcast.bench.compare import CompareError, compare, to_markdown
-from lpgcast.bench.corpus import load_corpus
-from lpgcast.bench.run import BenchReport, Row, new_report, run_row
-from lpgcast.config import LPGCastSettings
+from schemacast.bench.cli import main as bench
+from schemacast.bench.compare import CompareError, compare, to_markdown
+from schemacast.bench.corpus import load_corpus
+from schemacast.bench.run import BenchReport, Row, new_report, run_row
+from schemacast.config import SchemaCastSettings
 
 
 @pytest.fixture(scope="module")
 def oracle_report() -> BenchReport:
     cases = [case for case in load_corpus() if case.family in ("direction", "units")]
-    row = asyncio.run(run_row(cases, LPGCastSettings(), oracle=True))
+    row = asyncio.run(run_row(cases, SchemaCastSettings(), oracle=True))
     return new_report("dev", "2026-01-01T00:00:00+00:00", [row], None)
 
 

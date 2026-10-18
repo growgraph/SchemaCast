@@ -1,12 +1,11 @@
-"""The lpgcast command line."""
+"""The schemacast command line."""
 
 import json
-from importlib.metadata import entry_points
 
 from click.testing import CliRunner
 from conftest import DATA
 
-from lpgcast.cli import main
+from schemacast.cli import main
 
 
 def test_sheet_prints_the_type_sheet():
@@ -37,11 +36,6 @@ def test_sheet_prints_the_reply_schema():
     assert vertex["properties"]["type"]["enum"] == ["Machine", "Person", "WorkOrder"]
 
 
-def test_text2lpg_is_an_alias():
-    scripts = {ep.name: ep.value for ep in entry_points(group="console_scripts")}
-    assert scripts["text2lpg"] == scripts["lpgcast"] == "lpgcast.cli:main"
-
-
 def test_select_prints_one_json_line_per_episode():
     result = CliRunner().invoke(
         main,
@@ -61,7 +55,7 @@ def test_select_prints_one_json_line_per_episode():
 
 
 def test_select_reports_a_failure_and_exits_non_zero(monkeypatch):
-    monkeypatch.setenv("LPGCAST_SLICE_MAX_TOKENS", "10")
+    monkeypatch.setenv("SCHEMACAST_SLICE_MAX_TOKENS", "10")
     result = CliRunner().invoke(
         main, ["select", "--schema", str(DATA / "schema.yaml"), "--text", "zzz"]
     )
@@ -79,12 +73,12 @@ def test_cast_replays_saves_and_writes(make_client, tmp_path, monkeypatch):
 
     from test_cast import ANN, ANN_REPLY, NOTE, NOTE_REPLY
 
-    from lpgcast.cast import LPGCaster
-    from lpgcast.schema_io import load_schema
+    from schemacast.cast import SchemaCaster
+    from schemacast.schema_io import load_schema
 
     plant = DATA / "plant.yaml"
     client, _ = make_client(routes={"m1": [ANN_REPLY], "m2": [NOTE_REPLY]})
-    asyncio.run(LPGCaster(load_schema(plant), client=client).cast([ANN, NOTE]))
+    asyncio.run(SchemaCaster(load_schema(plant), client=client).cast([ANN, NOTE]))
 
     episodes = tmp_path / "episodes.jsonl"
     episodes.write_text(
@@ -92,8 +86,8 @@ def test_cast_replays_saves_and_writes(make_client, tmp_path, monkeypatch):
     )
     conn = tmp_path / "conn.yaml"
     conn.write_text(f"db_type: graflo_backend\noutput_dir: {tmp_path / 'db'}\n")
-    monkeypatch.setenv("LPGCAST_LLM_MODEL", client.settings.model)
-    monkeypatch.setenv("LPGCAST_LLM_BASE_URL", client.settings.base_url or "")
+    monkeypatch.setenv("SCHEMACAST_LLM_MODEL", client.settings.model)
+    monkeypatch.setenv("SCHEMACAST_LLM_BASE_URL", client.settings.base_url or "")
     out = tmp_path / "out"
 
     result = CliRunner().invoke(
@@ -132,7 +126,7 @@ def test_cast_replays_saves_and_writes(make_client, tmp_path, monkeypatch):
 def test_cast_replay_miss_is_a_clean_error(tmp_path, monkeypatch):
     episodes = tmp_path / "episodes.jsonl"
     episodes.write_text('{"source_id": "x", "text": "press S-7 at 200 kW"}\n')
-    monkeypatch.setenv("LPGCAST_LLM_MODEL", "fake-model")
+    monkeypatch.setenv("SCHEMACAST_LLM_MODEL", "fake-model")
     result = CliRunner().invoke(
         main,
         [

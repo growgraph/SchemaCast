@@ -1,6 +1,6 @@
 # Output files
 
-`lpgcast cast --out DIR` (or `save_cast(result, DIR)`) writes:
+`schemacast cast --out DIR` (or `save_cast(result, DIR)`) writes:
 
 | File | Holds | Same bytes on replay |
 |---|---|---|
@@ -36,7 +36,7 @@ An edge with an endpoint known only by a secondary identity: its `edge_id`, its
 
 ## `manifest.json`
 
-The output format version (2: groundings may point into context), the LPGCast
+The output format version (2: groundings may point into context), the SchemaCast
 and graflo versions, the schema as `name@version`, every model
 setting that reaches the provider, the token ceiling and slice budget, the
 counts by status, and `usage`: calls, cache hits, failures, re-asks, and

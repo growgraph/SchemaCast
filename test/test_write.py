@@ -9,10 +9,10 @@ from graflo.connections.graflo_backend import GraFloBackendConfig
 from graflo.connections.onto import Neo4jConfig
 from graflo.db.manager import ConnectionManager
 
-from lpgcast.cast import LPGCaster
-from lpgcast.episode import Episode
-from lpgcast.schema_io import load_schema
-from lpgcast.write import load_connection, write_cast
+from schemacast.cast import SchemaCaster
+from schemacast.episode import Episode
+from schemacast.schema_io import load_schema
+from schemacast.write import load_connection, write_cast
 
 #: Path to a graflo connection YAML for a disposable Neo4j database. The test
 #: that uses it redefines the schema there, so never point it at real data.
@@ -84,7 +84,7 @@ def plant():
 def cast(make_client, plant):
     async def _cast(episodes, routes):
         client, _ = make_client(routes=routes)
-        return await LPGCaster(plant, client=client).cast(episodes)
+        return await SchemaCaster(plant, client=client).cast(episodes)
 
     return _cast
 

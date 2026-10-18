@@ -7,7 +7,7 @@ products, tags and comments.
 ## 1. Look at what the model will see
 
 ```bash
-lpgcast sheet --schema examples/tickets/schema.yaml
+schemacast sheet --schema examples/tickets/schema.yaml
 ```
 
 This prints the **type sheet**: every vertex type with its description, other
@@ -16,7 +16,7 @@ names and properties, how it is identified, and every edge as
 No model is called.
 
 ```bash
-lpgcast select --schema examples/tickets/schema.yaml --episodes examples/tickets/episodes.jsonl
+schemacast select --schema examples/tickets/schema.yaml --episodes examples/tickets/episodes.jsonl
 ```
 
 This shows the slice of the schema each text would be cast against. A small
@@ -39,7 +39,7 @@ shown to the model.
 With a model configured (see [Installation](installation.md)):
 
 ```bash
-lpgcast cast --schema examples/tickets/schema.yaml \
+schemacast cast --schema examples/tickets/schema.yaml \
     --episodes examples/tickets/episodes.jsonl --out out/tickets
 ```
 
@@ -62,7 +62,7 @@ pass the schema.
 ## 4. Write to a database
 
 ```bash
-lpgcast cast ... --db examples/connections/neo4j.yaml
+schemacast cast ... --db examples/connections/neo4j.yaml
 ```
 
 A connection file is a graflo connection config; see
@@ -71,7 +71,7 @@ A connection file is a graflo connection config; see
 ## 5. Run it again for free
 
 ```bash
-lpgcast cast ... --out out/tickets-again --replay
+schemacast cast ... --out out/tickets-again --replay
 ```
 
 Every reply comes from the cache: no request is made, and everything but
@@ -82,11 +82,11 @@ Every reply comes from the cache: no request is made, and everything but
 ```python
 import asyncio
 
-from lpgcast import LPGCaster, load_schema, read_episodes, save_cast
+from schemacast import SchemaCaster, load_schema, read_episodes, save_cast
 
 schema = load_schema("examples/tickets/schema.yaml")
 result = asyncio.run(
-    LPGCaster(schema).cast(read_episodes("examples/tickets/episodes.jsonl"))
+    SchemaCaster(schema).cast(read_episodes("examples/tickets/episodes.jsonl"))
 )
 
 print(result.manifest.status)  # {'ok': ..., 'partial': ..., 'failed': ...}
