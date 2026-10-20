@@ -17,8 +17,9 @@ GUIDANCE: dict[FindingKind, str] = {
     "unknown_type": "Use only types listed under TYPES. If no type fits, move the item to `unmapped`.",
     "duplicate_ref": "Give every vertex its own ref.",
     "identity_insufficient": (
-        "Give the key properties (`id:`) the text states. If the text does not state "
-        "them, leave the vertex out or move it to `unmapped`; never invent a value."
+        "Give every key property (`id:`), or every property of an `alt id:`, that the "
+        "text states for this entity. If the text states none, keep the vertex as it "
+        "is; never invent a value."
     ),
     "undeclared_edge": (
         "Use only the edge patterns listed under TYPES, with `from` of the source type "

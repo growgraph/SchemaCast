@@ -67,7 +67,7 @@ Every metric is a ratio of counts pooled over episodes.
 | Direction | edges matched, over edges matched or found the wrong way round |
 | Span | matched items whose quote overlaps the expected one |
 | Mention | matched entities whose `mention` flag agrees |
-| Forbidden | forbidden vertices written, and forbidden edges produced |
+| Forbidden | forbidden vertices resolution would write, and forbidden edges produced |
 | Seed / closure recall | expected types among the seeds and in the slice, read on sliced episodes only |
 | Re-cast added / duplicated | natural or hash identities a second cast adds; assigned or blank vertices it mints anew |
 | Tokens, requests per episode | billed and cache-replayed tokens alike |

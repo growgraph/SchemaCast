@@ -216,6 +216,8 @@ class LLMClient:
         self._http_client = http_client
         self._provider_client: openai.AsyncOpenAI | None = None
         self._json_schema_rejected = False
+        # Set by the first provider reply; a cache hit does not count.
+        self._reached = False
 
     @classmethod
     def from_settings(
@@ -325,6 +327,16 @@ class LLMClient:
                     f"Request exceeded {self.settings.request_timeout_seconds}s "
                     f"({self.settings.model})"
                 ) from error
+            except openai.APIConnectionError as error:
+                self._count("calls_failed")
+                if not self._reached:
+                    # Never reached in this run: the endpoint is wrong or down,
+                    # so every other request would fail the same way.
+                    raise LLMConfigurationError(
+                        f"Cannot reach {self.settings.base_url or OPENAI_BASE_URL}: "
+                        f"{error}"
+                    ) from error
+                raise
             except (openai.BadRequestError, openai.UnprocessableEntityError) as error:
                 if (
                     mode == "json_schema"
@@ -365,6 +377,7 @@ class LLMClient:
                 self._count("calls_failed")
                 raise
 
+            self._reached = True
             choice = response.choices[0] if response.choices else None
             content = (choice.message.content or "") if choice is not None else ""
             refusal = choice.message.refusal if choice is not None else None
@@ -436,8 +449,8 @@ class LLMClient:
 
         Raises:
             LLMJsonParseError: no attempt produced a JSON object.
-            LLMConfigurationError: no key or model, or the endpoint refuses the
-                configuration.
+            LLMConfigurationError: no key or model, the endpoint refuses the
+                configuration, or it cannot be reached before any reply.
             LLMRequestTimeoutError: a request timed out twice.
             LLMTruncatedError: the reply stopped at the output token limit.
             LLMRefusalError: the model refused or the provider filtered the reply.

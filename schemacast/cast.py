@@ -1,7 +1,10 @@
 """Cast episodes into a governed schema: the whole pipeline.
 
 Per episode: select a slice → one extraction call → validate → at most two
-typed repairs → quarantine what still fails → resolve identities and assemble.
+typed repairs → quarantine what still fails → a mention graph. The batch's
+mention graphs are then resolved by graflo, without a model and without a
+database: what their keys identify becomes ``output``, the rest is staged. A
+write resolves them again against the database (``schemacast.write``).
 No critic pass: a valid extraction is never judged a second time.
 
 An episode that produces nothing is quarantined and the run goes on; so is one
@@ -19,6 +22,7 @@ from collections.abc import Iterable
 from importlib.metadata import version
 from typing import Any, Literal
 
+from graflo.architecture.graph_types.mention import MentionGraph, Resolution
 from graflo.architecture.schema.document import Schema
 from graflo.architecture.schema.graflo_output import GraFloOutput
 from openai import APIError
@@ -35,7 +39,7 @@ from schemacast.extract import (
     episode_shape,
     extract,
 )
-from schemacast.ground import Grounding
+from schemacast.ground import Grounding, groundings
 from schemacast.llm.cache import LLMCache, cache_key_config
 from schemacast.llm.client import (
     LLMClient,
@@ -48,13 +52,7 @@ from schemacast.llm.jsonparse import LLMJsonParseError
 from schemacast.llm.usage import UsageTracker, track_usage
 from schemacast.prompt import build_messages
 from schemacast.repair import repair_messages
-from schemacast.resolve import (
-    PendingEdge,
-    Resolution,
-    merge_containers,
-    resolve,
-    schema_ref,
-)
+from schemacast.schema_io import schema_ref
 from schemacast.select import (
     RetrievalMetrics,
     Selection,
@@ -63,10 +61,10 @@ from schemacast.select import (
     select,
 )
 from schemacast.sink import MemoryQuarantineSink, QuarantineRecord, QuarantineSink
-from schemacast.validate import Finding, Fix, UnresolvedMention, Validation, validate
+from schemacast.validate import Finding, Fix, Validation, validate
 
 #: Version of the files a cast writes; bumped when a record's meaning changes.
-OUTPUT_FORMAT_VERSION = 3
+OUTPUT_FORMAT_VERSION = 4
 
 #: Repair requests after the first reply, at most.
 MAX_REPAIRS = 2
@@ -120,24 +118,11 @@ class EpisodeResult(BaseModel):
         default=None,
         description="Why a repair request failed; the best earlier attempt is kept.",
     )
-    vertices: int = 0
-    edges: int = 0
-    pending: int = Field(
-        default=0, description="Edges awaiting a secondary-identity lookup."
-    )
-    quarantined: int = 0
+    mentions: int = 0
+    relations: int = 0
+    quarantined: int = Field(default=0, description="Items left out.")
     unmapped: int = 0
-    unresolved: int = Field(
-        default=0,
-        description="Mentions with no key and no picked entity; a later cast may resolve them.",
-    )
     fixes: list[Fix] = Field(default_factory=list)
-
-
-class UnresolvedRecord(UnresolvedMention):
-    """An unresolved mention, with the episode it is in."""
-
-    source_id: str
 
 
 class RunManifest(BaseModel):
@@ -156,12 +141,13 @@ class RunManifest(BaseModel):
     user_instruction: bool
     episodes: int
     status: dict[str, int]
-    vertices: int
-    edges: int
-    pending: int
+    mentions: int
+    relations: int
+    vertices: int = Field(description="Vertices the batch's keys identify.")
+    edges: int = Field(description="Edges between identified vertices.")
+    staged: int = Field(description="Mentions not identified without a database.")
     quarantined: int
     unmapped: int
-    unresolved: int = 0
     usage: UsageTracker
 
 
@@ -170,13 +156,17 @@ class CastResult(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    output: GraFloOutput = Field(
-        description="The full schema and every episode's graph."
+    graphs: list[MentionGraph] = Field(
+        default_factory=list, description="One mention graph per episode cast."
     )
-    pending: list[PendingEdge] = Field(default_factory=list)
+    resolution: Resolution = Field(
+        description="The graphs resolved by their keys, without a database."
+    )
+    output: GraFloOutput = Field(
+        description="The full schema and what the resolution identified."
+    )
     groundings: list[Grounding] = Field(default_factory=list)
     episodes: list[EpisodeResult] = Field(default_factory=list)
-    unresolved: list[UnresolvedRecord] = Field(default_factory=list)
     manifest: RunManifest
 
 
@@ -195,7 +185,8 @@ class EpisodeOutcome(BaseModel):
     validation: Validation | None = Field(
         default=None, description="The attempt kept, after repairs."
     )
-    resolution: Resolution | None = None
+    graph: MentionGraph | None = None
+    groundings: list[Grounding] = Field(default_factory=list)
     quarantine: list[QuarantineRecord] = Field(
         default_factory=list, description="What the episode left out."
     )
@@ -216,6 +207,7 @@ class SchemaCaster:
             (:attr:`sink` then holds them).
         selection: Selection tuning; its budget defaults to the settings'.
         max_concurrent_episodes: Episodes in flight at once.
+        owned: Connector-owned vertex types: linked by key, never created.
     """
 
     def __init__(
@@ -227,8 +219,10 @@ class SchemaCaster:
         sink: QuarantineSink | None = None,
         selection: SelectionConfig | None = None,
         max_concurrent_episodes: int = 8,
+        owned: frozenset[str] = frozenset(),
     ) -> None:
         self.schema = schema
+        self.owned = owned
         self.settings = settings or SchemaCastSettings()
         self.client = client or LLMClient(
             self.settings.llm, LLMCache(self.settings.cache)
@@ -333,13 +327,9 @@ class SchemaCaster:
         messages = build_messages(
             slice_, episode, user_instruction=self.settings.user_instruction
         )
-        shape = episode_shape(slice_, episode)
+        shape = episode_shape(slice_)
         current = first = validate(
-            extraction.wire,
-            slice_,
-            episode.text,
-            episode.context,
-            episode.candidates,
+            extraction.wire, slice_, episode.text, episode.context
         )
         current_reply = extraction.completion.content
         best, best_reply = current, current_reply
@@ -367,9 +357,7 @@ class SchemaCaster:
                 requests += 1
                 repair_failure = _fault_kind(error)
                 break
-            current = validate(
-                wire, slice_, episode.text, episode.context, episode.candidates
-            )
+            current = validate(wire, slice_, episode.text, episode.context)
             current_reply = completion.content
             if current.kept >= best.kept:
                 best, best_reply = current, current_reply
@@ -379,36 +367,33 @@ class SchemaCaster:
 
         known.update(requests=requests, repairs=repairs, repair_failure=repair_failure)
         quarantine = self._records(episode, best, best_reply, requests)
-        resolution = resolve(
-            best,
-            slice_,
-            episode,
-            extractor=_extractor(),
-            model=self.client.settings.model,
+        # The slice's ref, which keys minted for keyless entities depend on.
+        graph = best.graph(
+            episode.source_id, schema_ref(slice_), episode.reference_time
         )
-        container = resolution.container
-        kept = best.kept
+        removed = best.removed
         status: EpisodeStatus = (
-            "ok" if not best.findings else "partial" if kept else "failed"
+            "ok" if not removed else "partial" if best.kept else "failed"
         )
         return EpisodeOutcome(
             result=EpisodeResult(
                 source_id=episode.source_id,
                 status=status,
                 failure="nothing_valid" if status == "failed" else None,
-                vertices=sum(len(docs) for docs in container.vertices.values()),
-                edges=sum(len(triples) for triples in container.edges.values()),
-                pending=len(resolution.pending),
-                quarantined=len(best.findings),
+                mentions=len(graph.mentions),
+                relations=len(graph.relations),
+                quarantined=len(removed),
                 unmapped=len(best.unmapped),
-                unresolved=len(best.unresolved),
                 fixes=best.fixes,
                 **known,
             ),
             selection=selection,
             first=first,
             validation=best,
-            resolution=resolution,
+            graph=graph,
+            groundings=groundings(
+                graph, episode, extractor=_extractor(), model=self.client.settings.model
+            ),
             quarantine=quarantine,
         )
 
@@ -430,7 +415,7 @@ class SchemaCaster:
                 raw_output=reply,
                 schema_ref=ref,
             )
-            for finding in validation.findings
+            for finding in validation.removed
         ]
         records += [
             QuarantineRecord(
@@ -439,8 +424,8 @@ class SchemaCaster:
                 kind="unmapped",
                 message=item.note,
                 quote=item.quote,
-                char_start=item.span.start if item.span else None,
-                char_end=item.span.end if item.span else None,
+                char_start=item.span.start,
+                char_end=item.span.end,
                 schema_ref=ref,
             )
             for item in validation.unmapped
@@ -475,8 +460,11 @@ class SchemaCaster:
     def _assemble(
         self, outcomes: list[EpisodeOutcome], usage: UsageTracker
     ) -> CastResult:
-        resolutions = [o.resolution for o in outcomes if o.resolution is not None]
-        container = merge_containers([r.container for r in resolutions])
+        from graflo.hq.mention_resolve import promote, resolve_mentions
+
+        graphs = [o.graph for o in outcomes if o.graph is not None]
+        resolution = resolve_mentions(self.schema, graphs, owned=self.owned)
+        container = promote(self.schema, resolution)
         results = [o.result for o in outcomes]
         status = {name: 0 for name in ("ok", "partial", "failed")}
         for result in results:
@@ -496,27 +484,22 @@ class SchemaCaster:
             user_instruction=bool(self.settings.user_instruction),
             episodes=len(results),
             status=status,
-            vertices=sum(r.vertices for r in results),
-            edges=sum(r.edges for r in results),
-            pending=sum(r.pending for r in results),
+            mentions=sum(r.mentions for r in results),
+            relations=sum(r.relations for r in results),
+            vertices=sum(len(docs) for docs in container.vertices.values()),
+            edges=sum(len(triples) for triples in container.edges.values()),
+            staged=len(resolution.staged.mentions),
             quarantined=sum(r.quarantined for r in results),
             unmapped=sum(r.unmapped for r in results),
-            unresolved=sum(r.unresolved for r in results),
             usage=usage,
         )
-        unresolved = [
-            UnresolvedRecord(source_id=o.result.source_id, **u.model_dump())
-            for o in outcomes
-            if o.validation is not None
-            for u in o.validation.unresolved
-        ]
         return CastResult(
+            graphs=graphs,
+            resolution=resolution,
             output=GraFloOutput.model_validate(
                 {"schema": self.schema, "data": container}
             ),
-            pending=[edge for r in resolutions for edge in r.pending],
-            groundings=[g for r in resolutions for g in r.groundings],
+            groundings=[g for o in outcomes for g in o.groundings],
             episodes=results,
-            unresolved=unresolved,
             manifest=manifest,
         )

@@ -142,3 +142,78 @@ def test_cast_replay_miss_is_a_clean_error(tmp_path, monkeypatch):
     )
     assert result.exit_code == 1
     assert "require hits" in result.output
+
+
+def _cast(make_client, routes):
+    import asyncio
+
+    from test_cast import ANN, NOTE
+
+    from schemacast.cast import SchemaCaster
+    from schemacast.schema_io import load_schema
+
+    client, _ = make_client(routes=routes)
+    caster = SchemaCaster(load_schema(DATA / "plant.yaml"), client=client)
+    return asyncio.run(caster.cast([ANN, NOTE]))
+
+
+def test_a_failure_on_the_content_exits_zero(make_client, tmp_path):
+    from test_cast import NOTE_REPLY
+
+    from schemacast.cli import cast_summary
+
+    result = _cast(make_client, {"m1": ["not json"] * 3, "m2": [NOTE_REPLY]})
+    lines, status = cast_summary(result, tmp_path, cache_enabled=True)
+    assert status == 0
+    assert "1 failed: unparseable 1" in lines[0]
+    assert len(lines) == 1
+
+
+def test_a_provider_failure_exits_75_and_says_to_rerun(make_client, tmp_path):
+    from conftest import error
+    from test_cast import NOTE_REPLY
+
+    from schemacast.cli import EX_TEMPFAIL, cast_summary
+
+    result = _cast(make_client, {"m1": [error(500, "down")], "m2": [NOTE_REPLY]})
+    lines, status = cast_summary(result, tmp_path, cache_enabled=True)
+    assert status == EX_TEMPFAIL
+    assert "1 failed: provider_error 1" in lines[0]
+    assert "rerun the same command" in lines[1]
+    assert "cached replies cost nothing" in lines[1]
+
+
+def test_every_episode_failing_exits_one(make_client, tmp_path):
+    from conftest import error
+
+    from schemacast.cli import cast_summary
+
+    down = [error(500, "down")]
+    result = _cast(make_client, {"m1": down, "m2": down})
+    _, status = cast_summary(result, tmp_path, cache_enabled=True)
+    assert status == 1
+
+
+def test_cast_against_an_unreachable_endpoint_stops_at_once(tmp_path, monkeypatch):
+    episodes = tmp_path / "episodes.jsonl"
+    episodes.write_text('{"source_id": "x", "text": "press S-7 at 200 kW"}\n')
+    # Port 9 on loopback refuses the connection; nothing leaves the machine.
+    monkeypatch.setenv("SCHEMACAST_LLM_BASE_URL", "http://127.0.0.1:9/v1")
+    monkeypatch.setenv("SCHEMACAST_LLM_MODEL", "fake-model")
+    monkeypatch.setenv("SCHEMACAST_LLM_API_KEY", "test-key")
+    monkeypatch.setenv("SCHEMACAST_LLM_TRANSPORT_RETRIES", "0")
+    monkeypatch.setenv("SCHEMACAST_CACHE_ENABLED", "false")
+    result = CliRunner().invoke(
+        main,
+        [
+            "cast",
+            "--schema",
+            str(DATA / "plant.yaml"),
+            "--episodes",
+            str(episodes),
+            "--out",
+            str(tmp_path / "out"),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "Cannot reach http://127.0.0.1:9/v1" in result.output

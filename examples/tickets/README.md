@@ -12,8 +12,9 @@ What the episodes exercise:
 
 - `mail-1041` states a customer, a ticket and a product, with typed properties.
 - `chat-2207` writes a date in words, and an edge property.
-- `mail-1042` names a customer by email only: the edge waits for a lookup at write time.
-- `note-88` adds a comment (a blank type) and a wait in hours.
+- `mail-1042` names a customer by email only: it is staged, with its edge, until an entity with
+  that email is known; and it refers to a ticket by number only.
+- `note-88` adds a comment (a blank type), and a wait in hours on a ticket it only refers to.
 - `chat-2210` is an instruction, not a statement: nothing should be written from it.
 
 Look first; neither command calls a model:

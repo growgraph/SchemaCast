@@ -13,8 +13,8 @@ schemacast cast ... --replay
 
 `--replay` (or `SCHEMACAST_CACHE_REQUIRE_HIT=true`) serves every reply from the
 cache, and a miss stops the run with an error instead of calling the model. A
-replay that finishes therefore made no request. Its graph, groundings,
-quarantine, pending edges and episode results are byte-identical to the first
+replay that finishes therefore made no request. Its mentions, graph, staged
+mentions, groundings, quarantine and episode results are byte-identical to the first
 run; only `manifest.json` differs, since it reports usage.
 
 A miss means the request changed: the prompt, the schema slice or a model

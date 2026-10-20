@@ -12,7 +12,10 @@ from datetime import datetime
 from typing import Any, Literal
 
 from graflo.architecture.graph_types.identifiers import EdgeId
+from graflo.architecture.graph_types.mention import MentionGraph, TextSpan
 from pydantic import BaseModel, Field
+
+from schemacast.episode import Episode
 
 _EDGE_PUNCTUATION = " \t\r\n.,;:!?\"'`()[]{}«»“”‘’"
 
@@ -42,15 +45,9 @@ _TYPOGRAPHIC = str.maketrans(
 )
 
 
-class Span(BaseModel):
-    """Character offsets, end exclusive, into the episode's text or, when
-    ``context`` is set, into the text of that context item."""
-
-    start: int
-    end: int
-    context: str | None = Field(
-        default=None, description="Source id of the context item, if not the text."
-    )
+#: Character offsets, end exclusive, into the episode's text or, when
+#: ``context`` is set, into the text of that context item.
+Span = TextSpan
 
 
 def _fold(char: str) -> str:
@@ -126,7 +123,9 @@ def locate(quote: str, text: str, *, near: Span | None = None) -> Span | None:
 class Grounding(BaseModel):
     """One assertion and the span of text it was read from.
 
-    Carried in the cast result only; nothing here is written to the graph.
+    A grounding names the mention or relation of the cast's mention graph it
+    supports, by ref; resolution maps refs to entities. Carried in the cast
+    result only; nothing here is written to the graph.
     """
 
     source_id: str = Field(description="Episode the assertion was read from.")
@@ -134,14 +133,18 @@ class Grounding(BaseModel):
     vertex: str | None = Field(
         default=None, description="Vertex type, for a vertex or its property."
     )
-    identity: dict[str, Any] | None = Field(
-        default=None, description="Identity of the vertex, as written or looked up by."
+    ref: str | None = Field(
+        default=None, description="Mention ref, for a vertex or its property."
     )
     edge: EdgeId | None = Field(
         default=None, description="Edge, for an edge or its property."
     )
-    source_identity: dict[str, Any] | None = None
-    target_identity: dict[str, Any] | None = None
+    source_ref: str | None = Field(
+        default=None, description="Ref of the edge's source mention."
+    )
+    target_ref: str | None = Field(
+        default=None, description="Ref of the edge's target mention."
+    )
     property: str | None = Field(
         default=None, description="Property name, for a property."
     )
@@ -150,7 +153,7 @@ class Grounding(BaseModel):
     in_context: str | None = Field(
         default=None,
         description="Source id of the context item the span points into; None "
-        "for the episode's own text. Only identity values ground in context.",
+        "for the episode's own text. Only key values ground in context.",
     )
     quote: str = Field(description="The text at the span, as it stands in the source.")
     extractor: str = Field(description="``schemacast/<version>``.")
@@ -159,12 +162,49 @@ class Grounding(BaseModel):
     )
     schema_ref: str = Field(description="``<schema name>@<version>``.")
     reference_time: datetime | None = None
-    resolved_by: Literal["identity", "secondary", "candidate", "minted"] | None = Field(
-        default=None,
-        description="For a vertex: how it was identified — by a key the text states "
-        "(``identity``, ``secondary``), by a known entity the model picked "
-        "(``candidate``), or by a key SchemaCast derived (``minted``).",
-    )
-    lane: str | None = Field(
-        default=None, description="For a picked entity: how the caller found it."
-    )
+
+
+def groundings(
+    graph: MentionGraph,
+    episode: Episode,
+    *,
+    extractor: str,
+    model: str | None = None,
+) -> list[Grounding]:
+    """One grounding per mention, relation and stated property of *graph*."""
+    out: list[Grounding] = []
+
+    def add(span: Span, **target: Any) -> None:
+        text = episode.text
+        if span.context is not None:
+            text = [i.text for i in episode.context if i.source_id == span.context][-1]
+        out.append(
+            Grounding(
+                source_id=episode.source_id,
+                char_start=span.start,
+                char_end=span.end,
+                in_context=span.context,
+                quote=text[span.start : span.end],
+                extractor=extractor,
+                model=model,
+                schema_ref=graph.schema_ref,
+                reference_time=episode.reference_time,
+                **target,
+            )
+        )
+
+    for mention in graph.mentions:
+        target = {"vertex": mention.type, "ref": mention.ref}
+        add(mention.span, kind="vertex", **target)
+        for name, prop in mention.props.items():
+            add(prop.span, kind="property", property=name, **target)
+    for relation in graph.relations:
+        target = {
+            "edge": relation.edge_id,
+            "source_ref": relation.source,
+            "target_ref": relation.target,
+        }
+        add(relation.span, kind="edge", **target)
+        for name, prop in relation.props.items():
+            add(prop.span, kind="property", property=name, **target)
+    return out

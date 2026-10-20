@@ -2,16 +2,17 @@
 
 ## Groundings
 
-Every vertex, edge and property in a cast has a **grounding**: where in which
-text it was read. Groundings are written to `groundings.jsonl` beside the
-graph, not into it.
+Every mention, relation and property in a cast has a **grounding**: where in
+which text it was read. Groundings are written to `groundings.jsonl` beside the
+graph, not into it, and name the mention graph's refs; resolution says which
+entity a ref became.
 
 | Field | Holds |
 |---|---|
 | `source_id` | the episode the assertion came from |
 | `kind` | `vertex`, `edge` or `property` |
-| `vertex`, `identity` | for a vertex or its property: the type and identity (or lookup key) |
-| `edge`, `source_identity`, `target_identity` | for an edge or its property |
+| `vertex`, `ref` | for a mention or its property: the type and the mention's ref |
+| `edge`, `source_ref`, `target_ref` | for a relation or its property: the edge and its endpoints' refs |
 | `property` | for a property: its name |
 | `char_start`, `char_end`, `quote` | the span of the text, and its characters |
 | `in_context` | set when the span is in a [context](context.md) item: its `source_id`; offsets then point into that item's text |
@@ -36,7 +37,8 @@ per `unmapped` entry, in episode order:
 | `unmapped` | something the text states that no type in the slice covers |
 
 A finding record carries the model's raw reply and the number of attempts.
-`unmapped` entries show where the schema could grow.
+`unmapped` entries show where the schema could grow. An entry whose quote is not
+found in the text is dropped.
 
 In Python, any object with an `async write_records(records)` method can be the
 sink; `JsonlQuarantineSink` appends to a file, `MemoryQuarantineSink` keeps

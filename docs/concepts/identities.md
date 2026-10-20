@@ -1,62 +1,91 @@
-# Identities and mentions
+# Mentions and resolution
 
-SchemaCast computes every identity before it builds an edge, the same way graflo
-does for any other source. How depends on how the vertex type is identified:
+A short text rarely states a full key. "The customer with email
+jo@example.com raised HD-4415" names a customer by an alternate key and a ticket
+by its number, and says nothing else about either. SchemaCast therefore splits
+the work in two:
 
-| Identity of the type | Where its key comes from |
+1. **Cast** — the model reads the text into a **mention graph**: each entity the
+   text names (a *mention*: its type, the properties the text states, where it
+   states them) and the relations the text states between them. Nothing here
+   decides which entity a mention is.
+2. **Resolve** — graflo identifies each mention by its keys, without a model:
+   it becomes an *entity* of the graph, or it is **staged** with the reason, to
+   be resolved later.
+
+A cast without a database resolves against the batch alone (`graph.json`,
+`staged.jsonl`); `--db` resolves again with the database to look keys up in.
+
+## The key contract
+
+How a mention can be identified depends on its type's keys:
+
+| Key source | Declared in the schema as | Primary key comes from |
+|---|---|---|
+| stated | `identity: [account]` | the text: every identity field |
+| derived | `hash_identity_properties`, `identity_funnel` | a digest of every source field (or of one complete funnel branch) |
+| minted | `assigned: true`, `blank: true` | SchemaCast, for an entity the text introduces |
+
+**Alternate keys** (`secondary_identities`) find an entity but never create
+one: an email, a handle, a phone number. Declare one for every name a text uses
+for an entity it does not key. [Preparing a schema](../guides/schema.md#declare-keys)
+maps keys from other schema languages to these.
+
+## How a mention is resolved
+
+The first rule that holds decides:
+
+| The mention states | Outcome |
 |---|---|
-| natural (`identity: [email]`) | the text: the model must give the property |
-| hash (`hash_identity_properties`) | graflo's digest of those properties |
-| assigned (`assigned: true`) | a UUID derived from the schema and its version, the episode's `source_id`, the type and the model's `ref` |
-| blank (`blank: true`) | derived the same way |
+| a complete primary key | resolved: written with the properties the text states |
+| a complete alternate key | looked up, first among the batch's resolved mentions, then in the database: exactly one entity resolves it; several stage it as `ambiguous`, none as `unmatched` |
+| nothing, and its type is minted | minted when the text introduces the entity; staged as `keyless_reference` when it only refers to one |
+| part of a key | staged as `partial_key` |
+| no key field | staged as `no_key` |
 
-The derived UUIDs make a replay reproduce the same graph. A fresh model call
-that names its refs differently derives new ones, so assigned and blank
-vertices are not idempotent across re-casts; natural and hash vertices are.
+A relation follows its endpoints: written when both resolve, otherwise held
+with the staged mention it waits on. A mention's `introduces` (the model's
+`mention: false`) matters only for a minted type; for every other type the key
+decides.
 
-## Mentions
+**Partial keys never identify.** Nothing merges two vertices later, so a
+guessed identity would stay a duplicate. A staged mention keeps what the text
+states, so a later resolution — a re-run once the graph holds the entity, a
+known entity, a person — writes it then.
 
-A text often refers to something it says nothing new about: "the customer with
-email jo@example.com raised HD-4415". The model marks such an entity as a
-**mention**. A mention is never written as a vertex:
+**Connector-owned types are linked, never written.** When the schema comes in a
+manifest, a type that a connector-fed resource ingests is owned by that
+connector: a mention of it is looked up by its key and linked, and the text
+writes nothing onto it. One the database does not hold yet is staged as
+`owned_unmatched`, so a misread ticket number never becomes a ticket.
 
-- known by its **primary identity**, it is simply an edge endpoint;
-- known only by a **secondary identity** (`secondary_identities` in the
-  schema), the edge waits in `pending.jsonl`, and its endpoint is looked up in
-  the database at write time. A lookup that finds nothing, or more than one
-  vertex, leaves the edge out and is counted in `write.json`.
+## The repair a key gap asks for
 
-A mention with neither key is **unresolved**. That includes any mention of an
-assigned or blank type ("the work order from last week"): there is nothing to
-look it up by. An unresolved mention is never written, since writing it would
-mint a duplicate; it is listed in `unresolved.jsonl` with the number of edges
-left out because of it, and the episode counts it. A later cast that knows
-the entity can resolve it.
+When the model says a text introduces an entity of a stated or derived type
+but gives no complete key, validation asks once for the key, in case the reply
+left out one the text states (`identity_insufficient`). The mention is kept
+either way; resolution decides.
 
-## Known entities
+## An example
 
-The caller may give an episode **candidates**: vertices the graph already
-holds that the text may name, each with an id (`cid`), its type, its key and
-the label it was found by. SchemaCast never reads the graph; candidates come
-from the caller, for instance a lookup by label or alias over the target graph,
-or a file (`schemacast cast --known candidates.jsonl`, used for every episode
-that carries none of its own).
+The five texts of `examples/tickets`, and where their mentions go:
 
-```json
-{"cid": "k1", "type": "Machine", "key": {"serial": "S-7"}, "label": "the big press", "lane": "alias"}
-```
+| Text | Mention | Outcome |
+|---|---|---|
+| mail-1041 | Customer ACC-2291, Ticket HD-4411, Product SKU-77 | resolved by key |
+| chat-2207 | Agent lena.k, Ticket HD-4411, Tag "hardware" | resolved by key (the tag's key is derived) |
+| mail-1042 | Ticket HD-4415, HD-4411 | resolved by key; `DUPLICATE_OF` written |
+| mail-1042 | Customer with email jo.park@example.com | `unmatched` until an entity with that email exists; `RAISED` held |
+| note-88 | Comment | minted; `ON` HD-4411 written |
+| note-88 | Ticket HD-4411 (referred to) | resolved by key; its stated `wait` is written |
+| chat-2210 | none | an instruction, not a statement |
 
-The prompt lists them, and the reply may set a vertex's `candidate` to one of
-their ids — an enum of exactly those ids. A pick is checked without the model:
-an unknown id, or an entity of another type, is rejected and recorded as a
-`candidate_rejected` fix, and the vertex falls back to its own key. A valid
-pick takes the entity's key, so "the big press is down" links to machine `S-7`
-although the text never states a serial. A pick links a mention to an
-existing vertex; it never merges two.
+## Re-casting
 
-Every vertex grounding names how its vertex was identified, in `resolved_by`:
-`identity` or `secondary` (a key the text states), `candidate` (a pick, with
-the candidate's `lane`) or `minted` (a key SchemaCast derived).
+Keys a text states and keys derived from them are the same on every cast, so
+a re-cast resolves to the same entities. A minted key depends on the episode
+and the model's `ref`: a replay reproduces it, a fresh model call that names
+its refs differently mints another.
 
 ## Edges
 

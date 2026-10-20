@@ -80,7 +80,7 @@ nav:
     -   Quick start: getting_started/quickstart.md
 -   Concepts:
     -   How a cast works: concepts/index.md
-    -   Identities and mentions: concepts/identities.md
+    -   Mentions and resolution: concepts/identities.md
     -   Groundings and quarantine: concepts/groundings.md
     -   Context: concepts/context.md
 -   Guides:

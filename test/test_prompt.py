@@ -37,7 +37,9 @@ def test_chapters_come_in_cache_friendly_order(plant):
         < text.index("# CONTEXT")
         < text.index("# TEXT")
     )
-    assert "Written at: 2024-03-04T09:15:00+00:00" in text
+    assert "Reference time: 2024-03-04T09:15:00+00:00." in text
+    # It sits outside the delimited block, so it can never be quoted from the text.
+    assert text.index("Reference time:") < text.index("<<<EPISODE")
 
 
 def test_system_message_depends_on_the_slice_only(plant):

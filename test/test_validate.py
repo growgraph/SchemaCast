@@ -68,23 +68,32 @@ def _kinds(result):
 def test_a_good_reply_passes_with_coercion_recorded(plant):
     result = _check(plant, GOOD)
     assert result.findings == []
-    assert [v.props for v in result.vertices] == [
+    assert [v.values() for v in result.mentions] == [
         {"email": "ann@x.com"},
         {"serial": "S-7", "power": 200.0},
     ]
-    assert result.edges[0].edge_id == ("Person", "Machine", "OPERATES")
-    assert result.edges[0].props == {"since": "2024-03"}
+    assert result.relations[0].edge_id == ("Person", "Machine", "OPERATES")
+    assert result.relations[0].values() == {"since": "2024-03"}
     assert [(f.kind, f.path) for f in result.fixes] == [
         ("coerced", "vertices[1].props[1]")
     ]
-    assert result.unmapped[0].span is not None
+    assert result.unmapped[0].span.start == TEXT.index("Call +1 555")
+
+
+def test_an_unmapped_quote_outside_the_text_is_dropped(plant):
+    reply = copy.deepcopy(GOOD)
+    reply["unmapped"].append(
+        {"quote": "Written at: 2024-03-04T09:15:00+00:00", "note": "a timestamp"}
+    )
+    result = _check(plant, reply)
+    assert [u.quote for u in result.unmapped] == ["Call +1 555"]
 
 
 def test_spans_point_at_the_quotes(plant):
     result = _check(plant, GOOD)
-    machine = result.vertices[1]
+    machine = result.mentions[1]
     assert TEXT[machine.span.start : machine.span.end] == "press S-7"
-    power = machine.prop_spans["power"]
+    power = machine.props["power"].span
     assert TEXT[power.start : power.end] == "200 kW"
 
 
@@ -95,7 +104,7 @@ def test_unknown_type_drops_the_vertex_and_its_edges(plant):
         ("endpoint_invalid", "edge", "edges[0]"),
     ]
     assert [f.kind for f in result.repairable] == ["unknown_type"]
-    assert result.edges == []
+    assert result.relations == []
 
 
 def test_duplicate_ref(plant):
@@ -112,7 +121,7 @@ def test_property_of_another_type_is_undeclared(plant):
     assert _kinds(result) == [
         ("undeclared_property", "property", "vertices[1].props[1]")
     ]
-    assert result.vertices[1].props == {"serial": "S-7"}
+    assert result.mentions[1].values() == {"serial": "S-7"}
 
 
 def test_bad_value_is_a_coercion_finding_with_its_kind(plant):
@@ -183,33 +192,23 @@ def test_assigned_and_blank_types_need_no_key(plant):
     assert _check(plant, reply).findings == []
 
 
-def test_mentions_need_a_full_primary_or_secondary_identity(plant):
-    by_phone = {
+def test_a_reference_without_a_key_is_kept_for_resolution(plant):
+    # A referred-to entity is never a finding, whatever it states: graflo
+    # resolves or stages it.
+    by_name = {
         "ref": "v1",
         "type": "Person",
-        "quote": "+1 555",
+        "quote": "Ann",
         "mention": True,
-        "props": [{"name": "phone", "value": "+1 555", "quote": "+1 555"}],
+        "props": [{"name": "name", "value": "Ann", "quote": "Ann"}],
     }
-    assert _check(plant, {"vertices": [by_phone]}).findings == []
-
-    # A mention with no key is unresolved, not a finding: it is never minted
-    # and is reported for a later cast to resolve.
-    by_name = {**by_phone, "props": [{"name": "name", "value": "Ann", "quote": "Ann"}]}
-    result = _check(plant, {"vertices": [by_name]})
-    assert result.findings == [] and result.vertices == []
-    assert [(u.ref, u.type) for u in result.unresolved] == [("v1", "Person")]
-
-    work_order = {
-        "ref": "w",
-        "type": "WorkOrder",
-        "quote": "S-7",
-        "mention": True,
-        "props": [],
-    }
-    result = _check(plant, {"vertices": [work_order]})
+    work_order = {"ref": "w", "type": "WorkOrder", "quote": "S-7", "mention": True}
+    result = _check(plant, {"vertices": [by_name, work_order]})
     assert result.findings == []
-    assert [u.ref for u in result.unresolved] == ["w"]
+    assert [(m.ref, m.introduces) for m in result.mentions] == [
+        ("v1", False),
+        ("w", False),
+    ]
 
 
 def test_reversed_edge_is_flipped_and_recorded(plant):
@@ -217,8 +216,8 @@ def test_reversed_edge_is_flipped_and_recorded(plant):
     reply["edges"][0].update({"from": "v2", "to": "v1"})
     result = _check(plant, reply)
     assert result.findings == []
-    edge = result.edges[0]
-    assert (edge.source_ref, edge.target_ref) == ("v1", "v2")
+    edge = result.relations[0]
+    assert (edge.source, edge.target) == ("v1", "v2")
     assert [f.kind for f in result.fixes if f.path == "edges[0]"] == ["edge_reversed"]
 
 
@@ -253,7 +252,7 @@ def test_a_value_its_quote_does_not_state_is_a_finding(plant):
         "value_not_in_quote",
         "vertices[1].props[1]",
     )
-    machine = next(v for v in result.vertices if v.type == "Machine")
+    machine = next(v for v in result.mentions if v.type == "Machine")
     assert "power" not in machine.props
 
 
@@ -284,7 +283,7 @@ def test_an_identity_value_grounds_in_context(plant):
     }
     result = validate(WireExtraction.model_validate(reply), plant, text, context)
     assert result.findings == []
-    span = result.vertices[0].prop_spans["serial"]
+    span = result.mentions[0].props["serial"].span
     assert span.context == "m0"
     assert context[0].text[span.start : span.end] == "S-7"
     assert [f.kind for f in result.fixes] == ["grounded_in_context"]

@@ -51,9 +51,10 @@ def test_import_loads_nothing_heavy():
     probe = (
         "import sys, schemacast, schemacast.cli, schemacast.config, schemacast.llm, schemacast.episode, "
         "schemacast.select, schemacast.prompt, schemacast.extract, schemacast.validate, schemacast.repair, "
-        "schemacast.resolve, schemacast.ground, schemacast.sink, schemacast.cast, schemacast.output, schemacast.write, "
+        "schemacast.ground, schemacast.sink, schemacast.cast, schemacast.output, schemacast.write, "
         "schemacast.schema_io, schemacast.bench.cli, schemacast.bench.corpus, schemacast.bench.score, "
-        "schemacast.bench.oracle, schemacast.bench.run, schemacast.bench.report\n"
+        "schemacast.bench.oracle, schemacast.bench.run, schemacast.bench.report, "
+        "graflo.hq.mention_resolve\n"
         f"print(','.join(m for m in {NOT_IMPORTED!r} if m in sys.modules))"
     )
     loaded = subprocess.run(

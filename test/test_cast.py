@@ -247,7 +247,7 @@ async def test_a_fault_during_repair_keeps_the_first_reply(make_caster, fault, k
 
     episode = result.episodes[0]
     assert (episode.status, episode.repair_failure) == ("partial", kind)
-    assert episode.vertices == 2
+    assert episode.mentions == 2
     assert [r.kind for r in sink.records] == ["coercion"]
 
 
@@ -293,6 +293,27 @@ async def test_a_configuration_fault_stops_the_run(make_caster):
         await caster.cast([ANN, NOTE])
 
 
+async def test_an_endpoint_never_reached_stops_the_run(make_caster):
+    refused = httpx.ConnectError("Connection refused")
+    caster, _, _ = make_caster({"m1": [refused], "m2": [refused]})
+    with pytest.raises(
+        LLMConfigurationError, match="Cannot reach http://fake.local/v1"
+    ):
+        await caster.cast([ANN, NOTE])
+
+
+async def test_a_connection_error_after_a_reply_fails_one_episode(make_caster):
+    refused = httpx.ConnectError("Connection refused")
+    caster, _, _ = make_caster(
+        {"m1": [refused], "m2": [NOTE_REPLY]}, client={"delays": {"m1": 0.05}}
+    )
+    result = await caster.cast([ANN, NOTE])
+    assert [(e.status, e.failure) for e in result.episodes] == [
+        ("failed", "provider_error"),
+        ("ok", None),
+    ]
+
+
 async def test_replay_is_byte_identical_and_makes_no_request(make_caster, tmp_path):
     bad = copy.deepcopy(ANN_REPLY)
     bad["vertices"][1]["quote"] = "the big press"
@@ -316,7 +337,8 @@ async def test_replay_is_byte_identical_and_makes_no_request(make_caster, tmp_pa
         "graph.json",
         "groundings.jsonl",
         "episodes.jsonl",
-        "pending.jsonl",
+        "mentions.jsonl",
+        "staged.jsonl",
         "quarantine.jsonl",
     ):
         assert (tmp_path / "a" / name).read_bytes() == (

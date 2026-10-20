@@ -9,12 +9,12 @@ programs need are importable from `schemacast` itself:
 | `Episode`, `read_episodes` | the input ([`episode`](episode.md)) |
 | `load_schema` | a graflo schema or manifest from YAML or JSON ([`schema_io`](schema_io.md)) |
 | `save_cast` | a cast on disk ([`output`](output.md)) |
-| `write_cast`, `load_connection`, `WriteReport` (graflo's `ContainerWriteReport`) | writing to a database through graflo's `write_container` ([`write`](write.md)) |
+| `write_cast`, `load_connection`, `WriteReport` (graflo's `ContainerWriteReport`) | resolving against a database and writing through graflo's `write_mention_graphs` ([`write`](write.md)) |
 | `Grounding` | where an assertion was read ([`ground`](ground.md)) |
 | `JsonlQuarantineSink`, `MemoryQuarantineSink` | where left-out items go ([`sink`](sink.md)) |
 | `SchemaCastSettings`, `LLMSettings`, `CacheSettings` | settings ([`config`](config.md)) |
 
 The steps of a cast are modules of their own: [`select`](select.md),
-[`prompt`](prompt.md), [`extract`](extract.md), [`validate`](validate.md),
-[`repair`](repair.md) and [`resolve`](resolve.md). The model client is
+[`prompt`](prompt.md), [`extract`](extract.md), [`validate`](validate.md)
+and [`repair`](repair.md); resolution is graflo's `graflo.hq.mention_resolve`. The model client is
 [`llm`](llm.md), and the benchmark [`bench`](bench.md).

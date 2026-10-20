@@ -9,8 +9,13 @@ field type (declared units stripped), an edge given in the reverse of its
 declared direction is flipped, and quotes are matched ignoring case and
 whitespace runs. A property's quote is read nearest its owner's. An identity
 value the text refers to but only the episode's context states is grounded
-there. A number written as digits, or a date, must be what its quote states. What remains are findings, each naming the item it removes.
-An item with a finding is left out; the rest of the reply stands.
+there. A number written as digits, or a date, must be what its quote states.
+What remains are findings, each naming the item it removes; an item with a
+finding is left out, and the rest of the reply stands.
+
+Validation decides no identity. A mention that introduces an entity but states
+no complete key gets one non-removing finding, so a repair can ask for a key
+the reply left out; the mention is kept either way, and resolution decides.
 """
 
 from __future__ import annotations
@@ -20,16 +25,22 @@ from collections.abc import Sequence
 from typing import Any, Literal
 
 from graflo.architecture.graph_types.identifiers import EdgeId
+from graflo.architecture.graph_types.mention import (
+    Mention,
+    MentionGraph,
+    Relation,
+    StatedProp,
+    UnmappedText,
+)
 from graflo.architecture.schema.coerce import CoercionError, coerce_value
 from graflo.architecture.schema.context import extractable_properties
 from graflo.architecture.schema.document import Schema
 from graflo.architecture.schema.edge import Edge
-from graflo.architecture.schema.identity_digest import compute_vertex_identity
+from graflo.architecture.schema.key_contract import key_contract, key_status
 from graflo.architecture.schema.vertex import Field as SchemaField
-from graflo.architecture.schema.vertex import Vertex
 from pydantic import BaseModel, Field
 
-from schemacast.episode import Candidate, ContextItem
+from schemacast.episode import ContextItem
 from schemacast.extract import WireExtraction, WireProp
 from schemacast.fidelity import value_mismatch
 from schemacast.ground import Span, locate
@@ -85,6 +96,10 @@ class Finding(BaseModel):
     fragment: dict[str, Any] = Field(
         description="The offending item as the model wrote it."
     )
+    removes: bool = Field(
+        default=True,
+        description="False when the item is kept and the finding only asks a repair.",
+    )
 
 
 class Fix(BaseModel):
@@ -95,70 +110,17 @@ class Fix(BaseModel):
         "edge_reversed",
         "quote_normalized",
         "grounded_in_context",
-        "candidate_rejected",
     ]
     path: str
     message: str
 
 
-class ValidVertex(BaseModel):
-    """A vertex that passed, with coerced properties and spans."""
-
-    ref: str
-    type: str
-    mention: bool
-    props: dict[str, Any]
-    span: Span
-    prop_spans: dict[str, Span]
-    candidate: str | None = Field(
-        default=None, description="The known entity the model picked, if any."
-    )
-    candidate_key: dict[str, Any] | None = Field(
-        default=None, description="That entity's identity, which the vertex takes."
-    )
-    lane: str | None = Field(default=None, description="How the entity was found.")
-
-
-class UnresolvedMention(BaseModel):
-    """A vertex the text only refers to, with no key and no valid pick.
-
-    Never minted; the edges that reach it are held with it, so a later cast
-    with more known entities can resolve both.
-    """
-
-    ref: str
-    type: str
-    quote: str
-    span: Span | None
-    held_edges: int = Field(default=0, description="Edges left out because of it.")
-
-
-class ValidEdge(BaseModel):
-    """An edge that passed, oriented as declared."""
-
-    edge_id: EdgeId
-    source_ref: str
-    target_ref: str
-    props: dict[str, Any]
-    span: Span
-    prop_spans: dict[str, Span]
-
-
-class ValidUnmapped(BaseModel):
-    """An ``unmapped`` entry, located in the text when its quote is found."""
-
-    quote: str
-    note: str
-    span: Span | None
-
-
 class Validation(BaseModel):
     """The checked reply."""
 
-    vertices: list[ValidVertex] = Field(default_factory=list)
-    edges: list[ValidEdge] = Field(default_factory=list)
-    unmapped: list[ValidUnmapped] = Field(default_factory=list)
-    unresolved: list[UnresolvedMention] = Field(default_factory=list)
+    mentions: list[Mention] = Field(default_factory=list)
+    relations: list[Relation] = Field(default_factory=list)
+    unmapped: list[UnmappedText] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
     fixes: list[Fix] = Field(default_factory=list)
 
@@ -168,51 +130,36 @@ class Validation(BaseModel):
         return [f for f in self.findings if f.kind not in CONSEQUENTIAL]
 
     @property
+    def removed(self) -> list[Finding]:
+        """Findings that left an item out."""
+        return [f for f in self.findings if f.removes]
+
+    @property
     def kept(self) -> int:
-        """Items kept: vertices, edges and properties. Used to pick the best attempt."""
+        """Items kept: mentions, relations and properties. Used to pick the best attempt."""
         return (
-            len(self.vertices)
-            + len(self.edges)
-            + sum(len(v.props) for v in self.vertices)
-            + sum(len(e.props) for e in self.edges)
+            len(self.mentions)
+            + len(self.relations)
+            + sum(len(m.props) for m in self.mentions)
+            + sum(len(r.props) for r in self.relations)
+        )
+
+    def graph(
+        self, source_id: str, schema_ref: str, reference_time: Any = None
+    ) -> MentionGraph:
+        """The mention graph this reply states."""
+        return MentionGraph(
+            source_id=source_id,
+            schema_ref=schema_ref,
+            reference_time=reference_time,
+            mentions=self.mentions,
+            relations=self.relations,
+            unmapped=self.unmapped,
         )
 
 
 def _dump(model: BaseModel) -> dict[str, Any]:
     return json.loads(model.model_dump_json(by_alias=True))
-
-
-def mention_identity(
-    vertex: Vertex, props: dict[str, Any]
-) -> tuple[str, list[str]] | None:
-    """How a mention can be looked up: ``("identity", fields)`` when the primary
-    identity is complete (or its digest computable), else the first secondary
-    identity whose fields are all present. None when neither."""
-    mode = vertex.identity_mode
-    if (
-        mode == "natural"
-        and vertex.identity
-        and all(f in props for f in vertex.identity)
-    ):
-        return "identity", list(vertex.identity)
-    if mode == "hash" and compute_vertex_identity(props, vertex) is not None:
-        return "identity", list(vertex.identity)
-    for secondary in vertex.secondary_identities:
-        if all(f in props for f in secondary.fields):
-            return secondary.name or "secondary", list(secondary.fields)
-    return None
-
-
-def identity_fields(vertex: Vertex) -> frozenset[str]:
-    """Properties that take part in any identity of *vertex*."""
-    names: set[str] = set()
-    if vertex.identity_mode == "natural":
-        names.update(vertex.identity)
-    elif vertex.identity_mode == "hash":
-        names.update(vertex.digest_source_fields)
-    for secondary in vertex.secondary_identities:
-        names.update(secondary.fields)
-    return frozenset(names)
 
 
 class _Checker:
@@ -221,28 +168,11 @@ class _Checker:
         slice_: Schema,
         text: str,
         context: Sequence[ContextItem] = (),
-        candidates: Sequence[Candidate] = (),
     ) -> None:
         self.slice = slice_
         self.text = text
         self.context = {item.source_id: item.text for item in context}
-        self.candidates = {candidate.cid: candidate for candidate in candidates}
         self.result = Validation()
-
-    def pick(self, cid: str | None, type_: str, path: str) -> Candidate | None:
-        """The known entity *cid* names, if it exists and is of *type_*."""
-        if cid is None:
-            return None
-        candidate = self.candidates.get(cid)
-        if candidate is None or candidate.type != type_:
-            found = "no such entity" if candidate is None else f"a {candidate.type}"
-            self.fix(
-                "candidate_rejected",
-                path,
-                f"Candidate {cid!r} for a {type_} is {found}; left unpicked.",
-            )
-            return None
-        return candidate
 
     def source(self, span: Span) -> str:
         text = self.text if span.context is None else self.context[span.context]
@@ -272,7 +202,7 @@ class _Checker:
                 self.fix(
                     "grounded_in_context",
                     path,
-                    f"identity value quoted from context {source_id!r}",
+                    f"key value quoted from context {source_id!r}",
                 )
                 return span.model_copy(update={"context": source_id})
         return None
@@ -286,10 +216,9 @@ class _Checker:
         ref: str | None,
         *,
         near: Span | None = None,
-        identity: frozenset[str] = frozenset(),
-    ) -> tuple[dict[str, Any], dict[str, Span]]:
-        values: dict[str, Any] = {}
-        spans: dict[str, Span] = {}
+        keys: frozenset[str] = frozenset(),
+    ) -> dict[str, StatedProp]:
+        stated: dict[str, StatedProp] = {}
         for j, prop in enumerate(wire_props):
             prop_path = f"{path}.props[{j}]"
             fragment = _dump(prop)
@@ -307,7 +236,7 @@ class _Checker:
                     **common,
                 )
                 continue
-            if prop.name in values:
+            if prop.name in stated:
                 self.find(
                     kind="duplicate_property",
                     message=f"{prop.name!r} is given more than once for {owner}.",
@@ -322,7 +251,7 @@ class _Checker:
                 )
                 continue
             span = self.span(prop.quote, prop_path, near=near)
-            if span is None and prop.name in identity:
+            if span is None and prop.name in keys:
                 span = self.context_span(prop.quote, prop_path)
             if span is None:
                 self.find(
@@ -337,31 +266,24 @@ class _Checker:
                 continue
             if value != prop.value:
                 self.fix("coerced", prop_path, f"{prop.value!r} -> {value!r}")
-            values[prop.name] = value
-            spans[prop.name] = span
-        return values, spans
+            stated[prop.name] = StatedProp(value=value, quote=prop.quote, span=span)
+        return stated
 
-    def identity_ok(
-        self, vertex: Vertex, mention: bool, props: dict[str, Any]
+    def key_gap(
+        self, vertex_type: str, introduces: bool, values: dict[str, Any]
     ) -> str | None:
-        """None when the vertex can be identified, else why not."""
-        if mention:
-            if mention_identity(vertex, props) is not None:
-                return None
-            options = [", ".join(vertex.identity)] + [
-                ", ".join(s.fields) for s in vertex.secondary_identities
-            ]
-            if vertex.identity_mode in ("assigned", "blank"):
-                return f"A {vertex.name} has no key a text can name, so it cannot be referred to."
-            return f"A referred-to {vertex.name} needs all of one of: {'; '.join(options)}."
-        mode = vertex.identity_mode
-        if mode == "natural" and not any(f in props for f in vertex.identity):
-            return (
-                f"A {vertex.name} needs at least one of: {', '.join(vertex.identity)}."
-            )
-        if mode == "hash" and compute_vertex_identity(props, vertex) is None:
-            return f"A {vertex.name} needs the properties its key is computed from: {', '.join(vertex.digest_source_fields)}."
-        return None
+        """Why an introduced entity cannot be identified, or None."""
+        contract = key_contract(self.slice.core_schema.vertex_config[vertex_type])
+        if not introduces or contract.source == "minted":
+            return None
+        status = key_status(contract, values)
+        if status.state not in ("partial", "none"):
+            return None
+        message = f"A {vertex_type} is identified by {', '.join(status.missing)}"
+        if contract.alternates:
+            alternates = "; ".join(", ".join(a.fields) for a in contract.alternates)
+            message += f", or found by {alternates}"
+        return message + "."
 
     def vertices(self, wire: WireExtraction) -> dict[str, str]:
         """Check vertices; returns every ref the reply declared, mapped to its type."""
@@ -394,14 +316,14 @@ class _Checker:
                 continue
             fields = {f.name: f for f in extractable_properties(vertex)}
             span = self.span(wv.quote, path)
-            props, prop_spans = self.props(
+            props = self.props(
                 wv.props,
                 fields,
                 wv.type,
                 path,
                 wv.ref,
                 near=span,
-                identity=identity_fields(vertex),
+                keys=key_contract(vertex).key_fields,
             )
             if span is None:
                 self.find(
@@ -410,30 +332,21 @@ class _Checker:
                     **common,
                 )
                 continue
-            candidate = self.pick(wv.candidate, wv.type, path)
-            if candidate is None:
-                if wv.mention and mention_identity(vertex, props) is None:
-                    self.result.unresolved.append(
-                        UnresolvedMention(
-                            ref=wv.ref, type=wv.type, quote=wv.quote, span=span
-                        )
-                    )
-                    continue
-                reason = self.identity_ok(vertex, wv.mention, props)
-                if reason is not None:
-                    self.find(kind="identity_insufficient", message=reason, **common)
-                    continue
-            self.result.vertices.append(
-                ValidVertex(
+            introduces = not wv.mention
+            values = {name: prop.value for name, prop in props.items()}
+            gap = self.key_gap(wv.type, introduces, values)
+            if gap is not None:
+                self.find(
+                    kind="identity_insufficient", message=gap, removes=False, **common
+                )
+            self.result.mentions.append(
+                Mention(
                     ref=wv.ref,
                     type=wv.type,
-                    mention=wv.mention,
-                    props=props,
+                    introduces=introduces,
+                    quote=wv.quote,
                     span=span,
-                    prop_spans=prop_spans,
-                    candidate=candidate.cid if candidate else None,
-                    candidate_key=dict(candidate.key) if candidate else None,
-                    lane=candidate.lane if candidate else None,
+                    props=props,
                 )
             )
         return refs
@@ -443,8 +356,7 @@ class _Checker:
         return edge if edge is not None and edge.edge_id == edge_id else None
 
     def edges(self, wire: WireExtraction, refs: dict[str, str]) -> None:
-        valid_refs = {v.ref for v in self.result.vertices}
-        unresolved = {u.ref: u for u in self.result.unresolved}
+        valid_refs = {m.ref for m in self.result.mentions}
         for k, we in enumerate(wire.edges):
             path = f"edges[{k}]"
             common = {"scope": "edge", "path": path, "fragment": _dump(we)}
@@ -456,12 +368,6 @@ class _Checker:
                     message=f"No vertex has ref {missing[0]!r}.",
                     **common,
                 )
-                continue
-            held = next(
-                (unresolved[r] for r in (we.from_, we.to) if r in unresolved), None
-            )
-            if held is not None:
-                held.held_edges += 1
                 continue
             invalid = [r for r in (we.from_, we.to) if r not in valid_refs]
             if invalid:
@@ -497,7 +403,7 @@ class _Checker:
                 continue
             fields = {f.name: f for f in edge.properties}
             span = self.span(we.quote, path)
-            props, prop_spans = self.props(
+            props = self.props(
                 we.props, fields, f"edge {edge.relation or ''}", path, None, near=span
             )
             if span is None:
@@ -507,24 +413,25 @@ class _Checker:
                     **common,
                 )
                 continue
-            self.result.edges.append(
-                ValidEdge(
+            self.result.relations.append(
+                Relation(
                     edge_id=edge.edge_id,
-                    source_ref=source_ref,
-                    target_ref=target_ref,
-                    props=props,
+                    source=source_ref,
+                    target=target_ref,
+                    quote=we.quote,
                     span=span,
-                    prop_spans=prop_spans,
+                    props=props,
                 )
             )
 
     def unmapped(self, wire: WireExtraction) -> None:
         for item in wire.unmapped:
-            self.result.unmapped.append(
-                ValidUnmapped(
-                    quote=item.quote, note=item.note, span=locate(item.quote, self.text)
+            # A quote not found in the text is about the prompt around it.
+            span = locate(item.quote, self.text)
+            if span is not None:
+                self.result.unmapped.append(
+                    UnmappedText(quote=item.quote, note=item.note, span=span)
                 )
-            )
 
 
 def validate(
@@ -532,11 +439,9 @@ def validate(
     slice_: Schema,
     text: str,
     context: Sequence[ContextItem] = (),
-    candidates: Sequence[Candidate] = (),
 ) -> Validation:
-    """Check *wire* against *slice_*, the episode *text*, its *context* and the
-    known entities it may pick (*candidates*)."""
-    checker = _Checker(slice_, text, context, candidates)
+    """Check *wire* against *slice_*, the episode *text* and its *context*."""
+    checker = _Checker(slice_, text, context)
     refs = checker.vertices(wire)
     checker.edges(wire, refs)
     checker.unmapped(wire)

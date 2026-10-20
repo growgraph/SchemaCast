@@ -48,10 +48,11 @@ not at all (`failed`). Under `out/tickets/`:
 
 | File | Holds |
 |---|---|
-| `graph.json` | the schema and the graph |
-| `groundings.jsonl` | the quote and character span of every vertex, edge and property |
+| `mentions.jsonl` | what each text names and states, before identification |
+| `graph.json` | the schema and what the mentions' keys identify |
+| `staged.jsonl` | mentions not identified yet, with why |
+| `groundings.jsonl` | the quote and character span of every mention, relation and property |
 | `quarantine.jsonl` | what was left out and why, with the model's reply |
-| `pending.jsonl` | edges to an entity named only by a secondary identity |
 | `episodes.jsonl` | one result per text |
 | `manifest.json` | versions, settings, counts and token usage |
 

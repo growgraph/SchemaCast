@@ -17,9 +17,14 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from graflo.architecture.graph_types.mention import MentionGraph, Resolution
 from graflo.architecture.schema.coerce import coerce_value
 from graflo.architecture.schema.document import Schema
-from graflo.architecture.schema.identity_digest import compute_vertex_identity
+from graflo.architecture.schema.key_contract import (
+    key_contract,
+    key_status,
+    primary_identity,
+)
 from graflo.architecture.schema.vertex import Vertex
 from pydantic import BaseModel
 
@@ -27,7 +32,6 @@ from schemacast.bench.corpus import ExpectedEpisode, ExpectedGraph, ExpectedProp
 from schemacast.cast import EpisodeOutcome
 from schemacast.ground import Span, locate
 from schemacast.llm.usage import UsageTracker
-from schemacast.resolve import Resolution
 from schemacast.validate import CONSEQUENTIAL, Validation
 
 #: Findings that are about grounding or follow from another, not about the schema.
@@ -132,27 +136,14 @@ def _overlap(a: Span, b: Span) -> bool:
 
 
 def identity_keys(vertex: Vertex, props: dict[str, Any]) -> list[tuple[Any, ...]]:
-    """Every identity *props* complete: the primary first, then secondaries."""
+    """Every key *props* complete: the primary first, then secondaries."""
+    contract = key_contract(vertex)
     keys: list[tuple[Any, ...]] = []
-    mode = vertex.identity_mode
-    if (
-        mode == "natural"
-        and vertex.identity
-        and all(f in props for f in vertex.identity)
-    ):
-        keys.append(("id", *(_hashable(props[f]) for f in vertex.identity)))
-    elif mode == "hash":
-        digest = compute_vertex_identity(props, vertex)
-        if digest is not None:
-            keys.append(("id", digest))
-    for secondary in vertex.secondary_identities:
-        if all(f in props for f in secondary.fields):
-            keys.append(
-                (
-                    secondary.name or "secondary",
-                    *(_hashable(props[f]) for f in secondary.fields),
-                )
-            )
+    identity = primary_identity(vertex, contract, props)
+    if identity is not None:
+        keys.append(("id", *(_hashable(v) for v in identity.values())))
+    for alternate in key_status(contract, props).alternates:
+        keys.append((alternate.name, *(_hashable(props[f]) for f in alternate.fields)))
     return keys
 
 
@@ -243,8 +234,9 @@ def _entities(
     entities: list[_Entity] = []
     by_key: dict[tuple[str, tuple[Any, ...]], int] = {}
     ref_index: dict[str, int] = {}
-    for valid in validation.vertices:
-        keys = identity_keys(config[valid.type], valid.props)
+    for valid in validation.mentions:
+        values = valid.values()
+        keys = identity_keys(config[valid.type], values)
         index = next(
             (by_key[(valid.type, k)] for k in keys if (valid.type, k) in by_key), None
         )
@@ -256,11 +248,11 @@ def _entities(
             by_key.setdefault((valid.type, key), index)
             if key not in entity.keys:
                 entity.keys.append(key)
-        entity.mention = entity.mention and valid.mention
-        entity.props = {**valid.props, **entity.props}
+        entity.mention = entity.mention and not valid.introduces
+        entity.props = {**values, **entity.props}
         entity.spans.append(valid.span)
-        for name, span in valid.prop_spans.items():
-            entity.prop_spans.setdefault(name, []).append(span)
+        for name, prop in valid.props.items():
+            entity.prop_spans.setdefault(name, []).append(prop.span)
         ref_index[valid.ref] = index
     return entities, ref_index
 
@@ -336,12 +328,13 @@ def _score_props(
 
 
 def _reply(counts: Counts, validation: Validation, first: bool) -> None:
-    findings = validation.findings
-    vertices = len(validation.vertices) + sum(f.scope == "vertex" for f in findings)
-    edges = len(validation.edges) + sum(f.scope == "edge" for f in findings)
+    # A finding that keeps its item (a missing key) is no conformance defect.
+    findings = validation.removed
+    vertices = len(validation.mentions) + sum(f.scope == "vertex" for f in findings)
+    edges = len(validation.relations) + sum(f.scope == "edge" for f in findings)
     properties = (
-        sum(len(v.props) for v in validation.vertices)
-        + sum(len(e.props) for e in validation.edges)
+        sum(len(m.props) for m in validation.mentions)
+        + sum(len(r.props) for r in validation.relations)
         + sum(f.scope == "property" for f in findings)
     )
     nonconforming = sum(f.kind not in NOT_CONFORMANCE for f in findings)
@@ -461,25 +454,27 @@ def score_episode(
     for handle, item in gold.items():
         if handle not in pairs.values():
             counts.props_expected += len(item.props)
-    counts.forbidden_written += sum(
-        not entities[index].mention for index in banned_pairs
-    )
+    # A forbidden entity counts as written when resolution would write it.
+    resolution = _resolution(outcome.graph, schema)
+    resolved = {r.ref for r in resolution.resolved if not r.owned}
+    written = {ref_index[ref] for ref in resolved if ref in ref_index}
+    counts.forbidden_written += sum(index in written for index in banned_pairs)
 
     handles = {**pairs, **banned_pairs}
     produced: dict[
         tuple[Any, ...], tuple[dict[str, Any], list[Span], dict[str, list[Span]]]
     ] = {}
-    for valid in validation.edges:
+    for valid in validation.relations:
         key = (
             valid.edge_id[2],
-            ref_index[valid.source_ref],
-            ref_index[valid.target_ref],
+            ref_index[valid.source],
+            ref_index[valid.target],
         )
         props, spans, prop_spans = produced.setdefault(key, ({}, [], {}))
-        props.update({k: v for k, v in valid.props.items() if k not in props})
+        props.update({k: v for k, v in valid.values().items() if k not in props})
         spans.append(valid.span)
-        for name, span in valid.prop_spans.items():
-            prop_spans.setdefault(name, []).append(span)
+        for name, prop in valid.props.items():
+            prop_spans.setdefault(name, []).append(prop.span)
     counts.edges_produced = len(produced)
     by_handles = {
         (relation, handles.get(src), handles.get(tgt)): value
@@ -511,12 +506,22 @@ def score_episode(
     return counts
 
 
-def _identities(resolution: Resolution | None, schema: Schema) -> dict[str, set[Any]]:
+def _resolution(graph: MentionGraph | None, schema: Schema) -> Resolution:
+    """*graph* resolved by its keys alone, as a cast without a database does."""
+    from graflo.hq.mention_resolve import resolve_mentions
+
+    return resolve_mentions(schema, [graph] if graph is not None else [])
+
+
+def _identities(graph: MentionGraph | None, schema: Schema) -> dict[str, set[Any]]:
+    from graflo.hq.mention_resolve import promote
+
     out: dict[str, set[Any]] = {}
-    if resolution is None:
+    if graph is None:
         return out
     config = schema.core_schema.vertex_config
-    for name, docs in resolution.container.vertices.items():
+    container = promote(schema, _resolution(graph, schema))
+    for name, docs in container.vertices.items():
         fields = config[name].identity
         out.setdefault(name, set()).update(
             tuple(_hashable(doc.get(f)) for f in fields) for doc in docs
@@ -533,8 +538,8 @@ def score_recast(
     assigned or blank one is a *duplicate*, since nothing ties it to the first.
     """
     counts = Counts()
-    before = _identities(first.resolution, schema)
-    after = _identities(second.resolution, schema)
+    before = _identities(first.graph, schema)
+    after = _identities(second.graph, schema)
     config = schema.core_schema.vertex_config
     for name, keys in after.items():
         new = len(keys - before.get(name, set()))

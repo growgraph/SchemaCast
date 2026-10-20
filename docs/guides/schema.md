@@ -13,18 +13,36 @@ that is everything the model sees.
   `station` for a `Machine`). They are printed in the sheet and they seed
   selection: a text that says "press" pulls in `Machine`.
 
-## Make identities extractable
+## Declare keys
 
-- A **natural** identity (`identity: [serial]`) must be something texts state;
-  a vertex whose identity the text does not give is left out.
-- Use **`hash_identity_properties`** when the key is a combination of
-  properties the text gives.
-- Use **`assigned: true`** or **`blank: true`** for things a text creates
+Resolution identifies a mention by its type's keys only, so the keys decide
+what a text can write ([Mentions and resolution](../concepts/identities.md)).
+
+- A **stated** key (`identity: [serial]`) must be something texts state in full.
+  A composite key counts only when every field is stated.
+- A **derived** key (`hash_identity_properties`, or an `identity_funnel` whose
+  branches are the alternatives) digests properties texts state together.
+- A **minted** key (`assigned: true`, `blank: true`) suits things a text creates
   without naming: a note, a work order, a comment.
-- Declare **`secondary_identities`** for keys texts use to refer to an entity
-  they do not otherwise identify (an email, a phone number, a badge). Such a
-  mention is looked up at write time; see [Identities and
-  mentions](../concepts/identities.md).
+- An **alternate key** (`secondary_identities`) is how texts name an entity they
+  do not key: an email, a handle, a phone number. It finds an entity, never
+  creates one.
+- **Label fields** — a property whose `semantics.iri` is a label term
+  (`rdfs:label`, `skos:prefLabel`, `schema:name`) — mark the names a later
+  candidate lookup searches.
+
+A schema from another source maps its keys the same way:
+
+| Source | Primary key | Alternate keys |
+|---|---|---|
+| SQL | `PRIMARY KEY` | `UNIQUE` constraints |
+| Neo4j | node key constraint | uniqueness constraints |
+| OWL | the IRI (never in a text) | `owl:hasKey`, inverse-functional datatype properties |
+| JSON Schema, OpenAPI | none declared: choose stated fields, derive a key, or mint | fields you know are unique |
+
+graflo's SQL and RDF inference write these as `identity` and
+`secondary_identities`. A type whose only key a text cannot state — an IRI, a
+surrogate id — needs an alternate key, or its mentions stay staged.
 
 ## Type the properties
 

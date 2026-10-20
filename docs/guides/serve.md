@@ -29,9 +29,11 @@ schemacast serve --port 8997
 endpoint.
 
 The reply holds what [`schemacast cast --out`](../reference/output.md) writes:
-`graph` (graflo's `GraFloOutput`), `groundings`, `pending`, `quarantine`,
-`episodes` and `manifest`. To write the graph, pass `graph` and `pending` to
-graflo's `write_container`, the function `write_cast` uses.
+`mentions` (one mention graph per episode), `graph` (graflo's `GraFloOutput` of
+what the keys identify without a database), `staged`, `groundings`,
+`quarantine`, `episodes` and `manifest`. To write, pass `mentions` to graflo's
+`write_mention_graphs`, the function `write_cast` uses: it resolves them
+against the target first.
 
 | Status | Means |
 |---|---|

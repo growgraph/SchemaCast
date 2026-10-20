@@ -95,9 +95,10 @@ correction, at most twice.
 
 ### Identities, not guesses
 
-A vertex is written only when the text states its identity. An entity the text
-merely refers to is looked up by its key, never created again. Writing a cast
-twice leaves a database that upserts unchanged.
+A text's mentions are resolved by their keys, never guessed: a complete key
+identifies an entity, an alternate key looks one up, and anything less waits,
+staged with its reason. Writing a cast twice leaves a database that upserts
+unchanged.
 
 </div>
 <div markdown>

@@ -64,8 +64,9 @@ result = asyncio.run(
 )
 ```
 
-`--out` gets the graph, a grounding per assertion, the quarantine, edges waiting for a lookup,
-one result per text and a run manifest. `--replay` serves every reply from the cache and makes no
+`--out` gets each text's mention graph, what their keys identify, what is staged until a lookup
+can identify it, a grounding per assertion, the quarantine, one result per text and a run
+manifest. `--replay` serves every reply from the cache and makes no
 request; everything but the manifest is byte-identical. Writing upserts by identity, so writing a
 cast twice changes nothing in a database that upserts.
 

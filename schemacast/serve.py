@@ -2,8 +2,10 @@
 
 One stateless, synchronous route: ``POST /cast`` takes a schema inline, the
 episodes and options, and returns what ``schemacast cast --out`` writes — the
-graph, groundings, pending edges, quarantine, episode results and the run
-manifest. The service never writes to a database and never calls back to the
+mention graphs, what their keys identify, what is staged, groundings,
+quarantine, episode results and the run manifest. The caller writes: it
+resolves the mention graphs against its database (graflo
+``write_mention_graphs``). The service never writes to a database and never calls back to the
 caller, so it holds no database credentials and needs no URL allow-list.
 
 The key is fail-closed: every route but ``/health`` needs
@@ -22,16 +24,16 @@ from importlib.metadata import version
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from graflo.architecture.graph_types.mention import MentionGraph, Staged
 from pydantic import BaseModel, ConfigDict, Field
 
 from schemacast import __version__
-from schemacast.cast import EpisodeResult, RunManifest, SchemaCaster, UnresolvedRecord
+from schemacast.cast import EpisodeResult, RunManifest, SchemaCaster
 from schemacast.config import SchemaCastSettings, ServeSettings
 from schemacast.episode import Episode
 from schemacast.ground import Grounding
 from schemacast.llm.cache import CacheMissError, LLMCache
 from schemacast.llm.client import LLMClient, LLMConfigurationError
-from schemacast.resolve import PendingEdge
 from schemacast.schema_io import schema_from_mapping
 from schemacast.sink import MemoryQuarantineSink, QuarantineRecord
 
@@ -60,14 +62,16 @@ class CastRequest(BaseModel):
 class CastResponse(BaseModel):
     """What ``schemacast cast --out`` writes, in one body."""
 
-    graph: dict[str, Any] = Field(
-        description="graflo ``GraFloOutput``: schema and data."
+    mentions: list[MentionGraph] = Field(
+        description="One mention graph per episode cast: what to resolve and write."
     )
+    graph: dict[str, Any] = Field(
+        description="graflo ``GraFloOutput``: what the keys identify without a database."
+    )
+    staged: Staged = Field(description="Mentions not identified without a database.")
     groundings: list[Grounding]
-    pending: list[PendingEdge]
     quarantine: list[QuarantineRecord]
     episodes: list[EpisodeResult]
-    unresolved: list[UnresolvedRecord] = Field(default_factory=list)
     manifest: RunManifest
 
 
@@ -148,12 +152,12 @@ def create_app(
         except CacheMissError as error:
             raise HTTPException(409, str(error)) from error
         return CastResponse(
+            mentions=result.graphs,
             graph=result.output.to_dict(),
+            staged=result.resolution.staged,
             groundings=result.groundings,
-            pending=result.pending,
             quarantine=sink.records,
             episodes=result.episodes,
-            unresolved=result.unresolved,
             manifest=result.manifest,
         )
 

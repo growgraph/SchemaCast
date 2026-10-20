@@ -5,22 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0]
 
 ### Added
 
-- **Known entities:** `Episode.candidates` lists existing vertices a text may name; the reply may
-  pick one per vertex by `cid`, checked without the model (`candidate_rejected` otherwise), and a
-  picked vertex takes the entity's key. `schemacast cast --known FILE` gives candidates to every
-  episode without its own; `POST /cast` takes them on each episode.
-- Vertex groundings carry `resolved_by` (`identity`, `secondary`, `candidate`, `minted`) and, for a
-  pick, the candidate's `lane`.
+- **`cast` exit status by cause:** 0 when every failure is about the episode itself, 75 when some
+  episodes failed at the provider (a rerun retries them), 1 when the run stopped or every episode
+  failed. The summary names failures by kind.
 
 ### Changed
 
-- **A mention with no key is unresolved**, not an `identity_insufficient` finding: never written,
-  not repaired, listed in `unresolved.jsonl` (and `unresolved` in `POST /cast`) with the edges it
-  holds back. Output format version 3.
+- **A cast is a mention graph.** Each episode yields its mentions (type, stated properties,
+  spans), the relations between them and `unmapped`; graflo resolves them by keys
+  (`resolve_mentions`): a complete primary key, or a secondary identity matching one entity in the
+  batch or, with `--db`, the database. The rest is staged with a reason in `staged.jsonl`, with
+  the relations waiting on it. A mention's stated properties are written when it resolves.
+- **Partial keys never identify**; a composite or digest key counts only when complete.
+- **Connector-owned types**: given a manifest, a type a connector ingests is linked, never created
+  or written from text.
+- Output format version 4: `mentions.jsonl` and `staged.jsonl` replace `pending.jsonl` and
+  `unresolved.jsonl`; groundings name mention refs (`ref`, `source_ref`, `target_ref`) instead of
+  identities; `POST /cast` returns `mentions` and `staged`; `write_cast` returns the database's
+  resolution with the report.
+- `identity_insufficient` no longer removes the mention: it asks one repair for a key the reply may
+  have left out.
+- An endpoint that no request of the run has reached stops the run as a configuration error.
+- The prompt labels the reference time as not part of the text and says every quote comes from
+  inside a delimited block; an `unmapped` entry whose quote is not in the text is dropped.
+- `examples/tickets`: `title` and `wait` carry descriptions.
 - **Renamed from `lpgcast` to `schemacast`**: the distribution, the import package, the CLI
   (`schemacast`, `schemacast-bench`), `SchemaCaster` and `SchemaCastSettings`, the
   `SCHEMACAST_` environment prefixes and the default cache directory. The `text2lpg` alias is gone.

@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 from click.testing import CliRunner
+from graflo.architecture.schema.key_contract import key_contract, key_status
 
 from schemacast.bench.cli import main as bench
 from schemacast.bench.corpus import (
@@ -25,7 +26,6 @@ from schemacast.bench.score import gold_vertices, score_episode, score_recast
 from schemacast.cast import SchemaCaster
 from schemacast.config import CacheSettings, SchemaCastSettings
 from schemacast.ground import locate
-from schemacast.validate import identity_fields, mention_identity
 
 CORPUS = load_corpus()
 BY_NAME = {case.name: case for case in CORPUS}
@@ -59,7 +59,7 @@ def test_the_expected_graph_is_in_the_text(case: BenchCase):
             gold_vertices(graph, case.schema_, text, context)  # values
             for handle, vertex in graph.vertices.items():
                 assert locate(vertex.quote, text), (episode.source_id, handle)
-                identity = identity_fields(config[vertex.type])
+                identity = key_contract(config[vertex.type]).key_fields
                 for name, prop in vertex.props.items():
                     source = text
                     if prop.context is not None:
@@ -84,7 +84,8 @@ def test_the_expected_graph_is_in_the_text(case: BenchCase):
         for handle, vertex in expected.vertices.items():
             gold = gold_vertices(expected, case.schema_, text, context)[handle]
             if vertex.mention:
-                assert mention_identity(config[vertex.type], gold.props), handle
+                status = key_status(key_contract(config[vertex.type]), gold.props)
+                assert status.state in ("primary", "alternate"), handle
             elif config[vertex.type].identity_mode == "natural":
                 assert gold.keys and gold.keys[0][0] == "id", handle
 
@@ -244,7 +245,8 @@ async def test_a_re_cast_that_renames_a_ref_duplicates_an_assigned_vertex(make_c
     one, _ = await _cast_one(case, source_id, client_a)
     two, _ = await _cast_one(case, source_id, client_b)
     counts = score_recast(one, two, case.schema_)
-    assert counts.recast_vertices == 2
+    # The mentioned machine is written by its key, so the re-cast adds nothing.
+    assert counts.recast_vertices == 3
     assert counts.recast_added == 0
     assert counts.recast_minted == 1
     assert counts.recast_duplicated == 1

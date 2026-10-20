@@ -1,8 +1,9 @@
-"""Write a cast to a database through graflo's ``write_container``.
+"""Write a cast to a database through graflo's ``write_mention_graphs``.
 
 The schema is defined on the target first (an existing definition is reused),
-edges whose endpoint is known only by a secondary identity are looked up, and
-the container is upserted by identity without an ingestion resource.
+the cast's mention graphs are resolved again with the database to look keys up
+in, and what they identify is upserted by identity without an ingestion
+resource. What is still not identified is returned staged, not written.
 
 graflo's database layer is imported inside these functions: it loads drivers
 and dataframe libraries that a cast without a write never needs.
@@ -16,13 +17,11 @@ from typing import TYPE_CHECKING, Any
 import yaml
 
 if TYPE_CHECKING:
+    from graflo.architecture.graph_types.mention import Resolution
     from graflo.connections.onto import DBConfig
     from graflo.hq.container_write import ContainerWriteReport
 
     from schemacast.cast import CastResult
-
-#: A secondary identity that matches several vertices names none of them.
-LOOKUP_AMBIGUITY = "skip"
 
 
 def __getattr__(name: str) -> Any:
@@ -45,21 +44,25 @@ def load_connection(path: str | Path) -> DBConfig:
 
 
 async def write_cast(
-    result: CastResult, conn_conf: DBConfig, *, recreate_schema: bool = False
-) -> ContainerWriteReport:
-    """Write *result* to the database *conn_conf* points at.
+    result: CastResult,
+    conn_conf: DBConfig,
+    *,
+    owned: frozenset[str] = frozenset(),
+    recreate_schema: bool = False,
+) -> tuple[Resolution, ContainerWriteReport]:
+    """Resolve *result*'s mention graphs against *conn_conf* and write them.
 
-    Vertices and edges are upserted by identity, so writing the same cast twice
-    leaves a database that upserts unchanged. graflo's file backend appends on
-    every write instead; count distinct identities there.
+    *owned* types are linked to what the database holds, never created. Writing
+    upserts by identity, so writing the same cast twice leaves a database that
+    upserts unchanged. graflo's file backend appends on every write instead;
+    count distinct identities there.
     """
-    from graflo.hq.container_write import write_container
+    from graflo.hq.mention_resolve import write_mention_graphs
 
-    return await write_container(
+    return await write_mention_graphs(
         result.output.graph_schema,
-        result.output.data,
+        result.graphs,
         conn_conf,
-        pending=result.pending,
+        owned=owned,
         recreate_schema=recreate_schema,
-        ambiguity=LOOKUP_AMBIGUITY,
     )

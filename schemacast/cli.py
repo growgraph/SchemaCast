@@ -4,19 +4,65 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
 from graflo.architecture.schema.context import instance_json_schema, render_type_sheet
 
 from schemacast import __version__
 from schemacast.config import SchemaCastSettings
-from schemacast.episode import Episode, read_candidates, read_episodes, with_known
+from schemacast.episode import Episode, read_episodes
 from schemacast.llm.cache import CacheMissError
 from schemacast.llm.client import LLMConfigurationError
-from schemacast.schema_io import load_schema
+from schemacast.schema_io import load_contract, load_schema
 from schemacast.select import SelectionConfig, SelectionError, select
+
+if TYPE_CHECKING:
+    from schemacast.cast import CastResult
+
+#: ``cast`` exit status when some episodes failed at the provider (sysexits
+#: ``EX_TEMPFAIL``): the output is incomplete, and a rerun retries them.
+EX_TEMPFAIL = 75
+
+
+def cast_summary(
+    result: CastResult, out_dir: Path, *, cache_enabled: bool
+) -> tuple[list[str], int]:
+    """The lines ``cast`` prints and its exit status.
+
+    A ``provider_error`` is never cached, so a rerun retries it; every other
+    failure is replayed from the cache, so a rerun reproduces it.
+    """
+    manifest = result.manifest
+    kinds = Counter(e.failure for e in result.episodes if e.status == "failed")
+    failed = f"{manifest.status['failed']} failed"
+    if kinds:
+        failed += ": " + ", ".join(f"{k} {n}" for k, n in sorted(kinds.items()))
+    summary = (
+        f"{manifest.episodes} episodes ({manifest.status['ok']} ok, "
+        f"{manifest.status['partial']} partial, {failed}): "
+        f"{manifest.mentions} mentions -> {manifest.vertices} vertices, "
+        f"{manifest.edges} edges, {manifest.staged} staged; "
+        f"{manifest.quarantined} quarantined, {manifest.unmapped} unmapped -> {out_dir}"
+    )
+    lines = [summary]
+    retry = kinds.get("provider_error", 0)
+    if retry:
+        rest = (
+            "cached replies cost nothing"
+            if cache_enabled
+            else "the cache is off, so every episode is cast again"
+        )
+        lines.append(
+            f"{retry} episode(s) failed at the provider: rerun the same command to "
+            f"retry them; {rest}."
+        )
+    if manifest.episodes and manifest.status["failed"] == manifest.episodes:
+        return lines, 1
+    return lines, EX_TEMPFAIL if retry else 0
 
 
 @click.group()
@@ -169,12 +215,6 @@ def select_command(
 @click.option(
     "--concurrency", default=8, show_default=True, help="Episodes cast at once."
 )
-@click.option(
-    "--known",
-    "known_path",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    help="Known entities, one candidate per line, for episodes that carry none.",
-)
 def cast(
     schema_path: Path,
     episodes_path: Path,
@@ -183,12 +223,20 @@ def cast(
     replay: bool,
     recreate_schema: bool,
     concurrency: int,
-    known_path: Path | None,
 ) -> None:
     """Cast EPISODES into SCHEMA and save the result under OUT.
 
+    Each text becomes a mention graph; what its keys identify is the graph, the
+    rest is staged. With --db, keys are looked up there too; a manifest's
+    connector-owned types are linked, never created.
+
     Episodes that produce nothing are quarantined and the run goes on; a
-    misconfigured model, or a cache miss under --replay, stops it.
+    misconfigured or unreachable model, or a cache miss under --replay, stops it.
+
+    Exit status: 0 when every episode was cast or failed on its own content
+    (too long, refused, truncated, unparseable), which a rerun reproduces; 75
+    when some failed at the provider, which a rerun retries; 1 when the run
+    stopped or every episode failed.
     """
     from schemacast.cast import SchemaCaster
     from schemacast.output import QUARANTINE_FILE, save_cast
@@ -200,38 +248,37 @@ def cast(
     out_dir.mkdir(parents=True, exist_ok=True)
     quarantine = out_dir / QUARANTINE_FILE
     quarantine.unlink(missing_ok=True)
+    schema, owned = load_contract(schema_path)
     caster = SchemaCaster(
-        load_schema(schema_path),
+        schema,
         settings=settings,
         sink=JsonlQuarantineSink(quarantine),
         max_concurrent_episodes=concurrency,
+        owned=owned,
     )
-    known = read_candidates(known_path) if known_path is not None else []
     try:
-        result = asyncio.run(
-            caster.cast(with_known(read_episodes(episodes_path), known))
-        )
+        result = asyncio.run(caster.cast(read_episodes(episodes_path)))
     except (LLMConfigurationError, CacheMissError) as error:
         raise click.ClickException(str(error)) from error
 
-    report = None
+    report = written = None
     if db_path is not None:
         from schemacast.write import load_connection, write_cast
 
-        report = asyncio.run(
+        written, report = asyncio.run(
             write_cast(
-                result, load_connection(db_path), recreate_schema=recreate_schema
+                result,
+                load_connection(db_path),
+                owned=owned,
+                recreate_schema=recreate_schema,
             )
         )
-    save_cast(result, out_dir, write_report=report)
-    manifest = result.manifest
-    click.echo(
-        f"{manifest.episodes} episodes ({manifest.status['ok']} ok, "
-        f"{manifest.status['partial']} partial, {manifest.status['failed']} failed): "
-        f"{manifest.vertices} vertices, {manifest.edges} edges, "
-        f"{manifest.quarantined} quarantined, {manifest.unmapped} unmapped -> {out_dir}",
-        err=True,
-    )
+    save_cast(result, out_dir, write_report=report, resolution=written)
+    lines, status = cast_summary(result, out_dir, cache_enabled=settings.cache.enabled)
+    for line in lines:
+        click.echo(line, err=True)
+    if status:
+        raise SystemExit(status)
 
 
 @main.command()

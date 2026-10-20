@@ -47,3 +47,28 @@ def load_schema(path: str | Path) -> Schema:
         json.loads(text) if path.suffix.lower() == ".json" else yaml.safe_load(text)
     )
     return schema_from_mapping(data, str(path))
+
+
+def schema_ref(schema: Schema) -> str:
+    """``<name>@<version>`` of a schema."""
+    return f"{schema.metadata.name}@{schema.metadata.version or ''}"
+
+
+def load_contract(path: str | Path) -> tuple[Schema, frozenset[str]]:
+    """The schema of *path* and its connector-owned vertex types.
+
+    A manifest names which types its connectors ingest; text links to those and
+    never creates them. A schema file owns nothing.
+    """
+    path = Path(path)
+    text = path.read_text(encoding="utf-8")
+    data: Any = (
+        json.loads(text) if path.suffix.lower() == ".json" else yaml.safe_load(text)
+    )
+    schema = schema_from_mapping(data, str(path))
+    if isinstance(data, dict) and "core_schema" not in data:
+        from graflo.architecture.contract.manifest import GraphManifest
+        from graflo.architecture.contract.ownership import connector_owned_types
+
+        return schema, connector_owned_types(GraphManifest.from_config(data))
+    return schema, frozenset()

@@ -86,7 +86,10 @@ class ExpectedVertex(BaseModel):
     quote: str = Field(description="Where the text names the entity.")
     mention: bool = Field(
         default=False,
-        description="The text only refers to it: never written, looked up by identity.",
+        description=(
+            "The text only refers to it: written by its key, or looked up by a "
+            "secondary identity."
+        ),
     )
     props: dict[str, ExpectedProp] = Field(default_factory=dict)
 

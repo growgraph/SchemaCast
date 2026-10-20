@@ -8,7 +8,6 @@ the reply has the flat shape.
 
 from __future__ import annotations
 
-import copy
 import math
 from typing import Any
 
@@ -47,7 +46,6 @@ class WireVertex(BaseModel):
     type: str
     quote: str = ""
     mention: bool = False
-    candidate: str | None = None
     props: list[WireProp] = Field(default_factory=list)
 
 
@@ -114,26 +112,9 @@ class WireShapeError(ValueError):
         self.content = content
 
 
-def with_candidates(shape: dict[str, Any], cids: list[str]) -> dict[str, Any]:
-    """*shape* with a ``candidate`` enum of *cids* on every vertex; *shape* itself
-    when there are none, so a cast without candidates sends the same bytes."""
-    if not cids:
-        return shape
-    extended = copy.deepcopy(shape)
-    vertex = extended["properties"]["vertices"]["items"]
-    vertex["properties"]["candidate"] = {
-        "type": ["string", "null"],
-        "enum": [*cids, None],
-    }
-    vertex["required"] = [*vertex["required"], "candidate"]
-    return extended
-
-
-def episode_shape(slice_: Schema, episode: Episode) -> dict[str, Any]:
-    """The JSON Schema one extraction or repair call for *episode* is held to."""
-    return with_candidates(
-        instance_json_schema(slice_), [c.cid for c in episode.candidates]
-    )
+def episode_shape(slice_: Schema) -> dict[str, Any]:
+    """The JSON Schema one extraction or repair call against *slice_* is held to."""
+    return instance_json_schema(slice_)
 
 
 def estimate_episode_tokens(episode: Episode) -> int:
@@ -163,7 +144,7 @@ async def extract(
             raise EpisodeTooLongError(episode.source_id, estimated, max_episode_tokens)
     messages = build_messages(slice_, episode, user_instruction=user_instruction)
     completion = await client.acomplete_json(
-        messages, episode_shape(slice_, episode), schema_name=INSTANCE_SCHEMA_NAME
+        messages, episode_shape(slice_), schema_name=INSTANCE_SCHEMA_NAME
     )
     try:
         wire = WireExtraction.model_validate(completion.data)

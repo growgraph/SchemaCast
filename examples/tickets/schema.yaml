@@ -38,13 +38,16 @@ core_schema:
                 type: STRING
             -   name: title
                 type: STRING
+                description: A one-line summary of the problem.
             -   name: severity
                 type: INT
             -   name: opened
                 type: DATETIME
             -   name: wait
                 type: FLOAT
+                description: Hours the customer waited for a fix.
                 semantics:
+                    synonyms: [waited, waiting time]
                     unit: h
             identity: [number]
         -   name: Product

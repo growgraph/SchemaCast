@@ -96,7 +96,7 @@ def _distinct(docs, key):
 async def test_writes_the_cast_to_the_file_backend(cast, tmp_path):
     result = await cast([ANN], {"m1": [ANN_REPLY]})
     conf = GraFloBackendConfig(output_dir=tmp_path)
-    report = await write_cast(result, conf)
+    _, report = await write_cast(result, conf)
 
     assert report.schema_defined
     assert report.vertices == {"Person": 1, "Machine": 1, "Note": 1}
@@ -116,7 +116,7 @@ async def test_a_second_write_reuses_the_schema_and_adds_no_identity(cast, tmp_p
         notes = _distinct(conn.fetch_all_docs("Note"), "id")
 
     again = await cast([ANN], {"m1": [ANN_REPLY]})
-    report = await write_cast(again, conf)
+    _, report = await write_cast(again, conf)
 
     assert not report.schema_defined
     with ConnectionManager(connection_config=conf) as conn:
@@ -130,10 +130,14 @@ async def test_secondary_identity_mentions_are_looked_up(cast, tmp_path):
     await write_cast(await cast([ANN], {"m1": [ANN_REPLY]}), conf)
 
     result = await cast([CALL], {"m2": [CALL_REPLY]})
-    assert len(result.pending) == 2
-    report = await write_cast(result, conf)
+    # Without the database, neither phone number identifies anyone.
+    assert [s.mention.ref for s in result.resolution.staged.mentions] == ["p", "q"]
+    written, _ = await write_cast(result, conf)
 
-    assert (report.lookups_resolved, report.lookups_unresolved) == (1, 1)
+    assert written.identity_of("m2", "p") == {"email": "ann@x.com"}
+    assert [(s.mention.ref, s.reason) for s in written.staged.mentions] == [
+        ("q", "unmatched")
+    ]
     with ConnectionManager(connection_config=conf) as conn:
         edges = conn.fetch_all_edges("Person", "Machine", "OPERATES")
     assert len(edges) == 2

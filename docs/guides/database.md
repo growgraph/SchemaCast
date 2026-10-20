@@ -36,22 +36,25 @@ lists every backend and field.
 1. **Defines the schema** on the target, or reuses the definition already
    there. `--recreate-schema` drops and redefines it first; on Neo4j that
    empties the database.
-2. **Looks up mentions** known only by a secondary identity, and attaches the
-   edges that waited for them. A lookup that finds nothing, or more than one
-   vertex, leaves its edge out.
-3. **Upserts** vertices by identity and edges by endpoints and relation (plus
-   any `identities` the edge declares), through graflo's writer.
+2. **Resolves the mentions** again, with the database to look keys up in: an
+   alternate key that names exactly one stored entity resolves its mention,
+   and a connector-owned type must already be stored. See [Mentions and
+   resolution](../concepts/identities.md).
+3. **Upserts** what resolved — vertices by identity, edges by endpoints and
+   relation (plus any `identities` the edge declares) — through graflo's writer.
+   What is still staged is not written.
 
-`write.json` in the output directory records the target, whether the schema was
-defined or reused, the documents sent per type, and how many lookups resolved.
+`write.json` records the target, whether the schema was defined or reused, and
+the documents sent per type; `staged.jsonl` then holds what the database did
+not resolve.
 
 ## Writing twice
 
 On a database that upserts, writing the same cast twice changes nothing:
 natural and hash identities match, and a replayed cast derives the same keys
 for assigned and blank vertices. A fresh model call may name its refs
-differently and so derive new keys for those; see [Identities and
-mentions](../concepts/identities.md).
+differently and so derive new keys for those; see [Mentions and
+resolution](../concepts/identities.md#re-casting).
 
 graflo's file backend appends on every write instead of upserting. Count
 distinct identities there, not records.
