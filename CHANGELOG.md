@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Requires graflo ≥ 1.21.0: mention graphs, resolution and candidates come from `graflo.link`.
 - **A cast is a mention graph.** Each episode yields its mentions (type, stated properties,
   spans), the relations between them and `unmapped`; graflo resolves them by keys
   (`resolve_mentions`): a complete primary key, or a secondary identity matching one entity in the
