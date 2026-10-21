@@ -17,7 +17,6 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from graflo.architecture.graph_types.mention import MentionGraph, Resolution
 from graflo.architecture.schema.coerce import coerce_value
 from graflo.architecture.schema.document import Schema
 from graflo.architecture.schema.key_contract import (
@@ -26,12 +25,19 @@ from graflo.architecture.schema.key_contract import (
     primary_identity,
 )
 from graflo.architecture.schema.vertex import Vertex
+from graflo.link.records import RecordGraph, Resolution
 from pydantic import BaseModel
 
-from schemacast.bench.corpus import ExpectedEpisode, ExpectedGraph, ExpectedProp
+from schemacast.bench.corpus import (
+    ExpectedEpisode,
+    ExpectedGraph,
+    ExpectedPicks,
+    ExpectedProp,
+)
 from schemacast.cast import EpisodeOutcome
-from schemacast.ground import Span, locate
+from schemacast.ground import Span, locate, span_of
 from schemacast.llm.usage import UsageTracker
+from schemacast.pick import Pick
 from schemacast.validate import CONSEQUENTIAL, Validation
 
 #: Findings that are about grounding or follow from another, not about the schema.
@@ -87,6 +93,13 @@ class Counts(BaseModel):
     recast_added: int = 0
     recast_minted: int = 0
     recast_duplicated: int = 0
+    # Pick, for the staged mentions a case gives candidates for.
+    picks_expected: int = 0
+    picks_offered: int = 0
+    picks_correct: int = 0
+    picks_linked: int = 0
+    picks_wrong: int = 0
+    picks_rejected: int = 0
     # Tokens, billed or replayed from the cache, and billed only.
     input_tokens: int = 0
     output_tokens: int = 0
@@ -133,6 +146,11 @@ def _hashable(value: Any) -> Any:
 
 def _overlap(a: Span, b: Span) -> bool:
     return a.context == b.context and a.start < b.end and b.start < a.end
+
+
+def _spans(evidence: dict[str, Any] | None) -> list[Span]:
+    span = span_of(evidence)
+    return [] if span is None else [span]
 
 
 def identity_keys(vertex: Vertex, props: dict[str, Any]) -> list[tuple[Any, ...]]:
@@ -248,11 +266,11 @@ def _entities(
             by_key.setdefault((valid.type, key), index)
             if key not in entity.keys:
                 entity.keys.append(key)
-        entity.mention = entity.mention and not valid.introduces
+        entity.mention = entity.mention and not valid.may_create
         entity.props = {**values, **entity.props}
-        entity.spans.append(valid.span)
+        entity.spans.extend(_spans(valid.evidence))
         for name, prop in valid.props.items():
-            entity.prop_spans.setdefault(name, []).append(prop.span)
+            entity.prop_spans.setdefault(name, []).extend(_spans(prop.evidence))
         ref_index[valid.ref] = index
     return entities, ref_index
 
@@ -472,9 +490,9 @@ def score_episode(
         )
         props, spans, prop_spans = produced.setdefault(key, ({}, [], {}))
         props.update({k: v for k, v in valid.values().items() if k not in props})
-        spans.append(valid.span)
+        spans.extend(_spans(valid.evidence))
         for name, prop in valid.props.items():
-            prop_spans.setdefault(name, []).append(prop.span)
+            prop_spans.setdefault(name, []).extend(_spans(prop.evidence))
     counts.edges_produced = len(produced)
     by_handles = {
         (relation, handles.get(src), handles.get(tgt)): value
@@ -506,15 +524,15 @@ def score_episode(
     return counts
 
 
-def _resolution(graph: MentionGraph | None, schema: Schema) -> Resolution:
+def _resolution(graph: RecordGraph | None, schema: Schema) -> Resolution:
     """*graph* resolved by its keys alone, as a cast without a database does."""
-    from graflo.hq.mention_resolve import resolve_mentions
+    from graflo.link.resolve import resolve_records
 
-    return resolve_mentions(schema, [graph] if graph is not None else [])
+    return resolve_records(schema, [graph] if graph is not None else [])
 
 
-def _identities(graph: MentionGraph | None, schema: Schema) -> dict[str, set[Any]]:
-    from graflo.hq.mention_resolve import promote
+def _identities(graph: RecordGraph | None, schema: Schema) -> dict[str, set[Any]]:
+    from graflo.link.resolve import promote
 
     out: dict[str, set[Any]] = {}
     if graph is None:
@@ -549,4 +567,44 @@ def score_recast(
         else:
             counts.recast_minted += len(keys)
             counts.recast_duplicated += new
+    return counts
+
+
+def ref_handles(
+    outcome: EpisodeOutcome,
+    expected: ExpectedEpisode,
+    schema: Schema,
+    text: str,
+    context: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Produced mention ref → the expected vertex handle it matched."""
+    if outcome.validation is None:
+        return {}
+    gold = gold_vertices(expected, schema, text, context)
+    entities, ref_index = _entities(outcome.validation, schema)
+    pairs = _match(entities, gold, set())
+    return {ref: pairs[index] for ref, index in ref_index.items() if index in pairs}
+
+
+def score_picks(picks: list[Pick], refs: dict[str, str], spec: ExpectedPicks) -> Counts:
+    """Pick counts: a pick is correct when what it links is the expected entity,
+    or nothing when none fits. A mention the cast did not stage counts as missed."""
+    counts = Counts(picks_expected=len(spec.mentions))
+    for pick in picks:
+        handle = refs.get(pick.ref)
+        if handle not in spec.mentions:
+            continue
+        wanted = spec.mentions[handle].pick
+        counts.picks_offered += pick.outcome != "no_candidates"
+        counts.picks_rejected += pick.outcome == "rejected"
+        linked = pick.key if pick.outcome == "picked" else None
+        counts.picks_linked += linked is not None
+        same = (linked is None and wanted is None) or (
+            linked is not None
+            and wanted is not None
+            and {k: str(v) for k, v in linked.items()}
+            == {k: str(v) for k, v in wanted.items()}
+        )
+        counts.picks_correct += same
+        counts.picks_wrong += linked is not None and not same
     return counts

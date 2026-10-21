@@ -22,6 +22,7 @@ from schemacast.select import SelectionConfig, SelectionError, select
 
 if TYPE_CHECKING:
     from schemacast.cast import CastResult
+    from schemacast.pick import PickItem
 
 #: ``cast`` exit status when some episodes failed at the provider (sysexits
 #: ``EX_TEMPFAIL``): the output is incomplete, and a rerun retries them.
@@ -281,13 +282,95 @@ def cast(
         raise SystemExit(status)
 
 
+def read_pick_items(path: Path) -> list[PickItem]:
+    """Pick input: one JSON object per line, each a ``PickItem``.
+
+    Raises:
+        click.ClickException: a line that is not a pick item.
+    """
+    from pydantic import ValidationError
+
+    from schemacast.pick import PickItem
+
+    items: list[PickItem] = []
+    with open(path, encoding="utf-8") as handle:
+        for number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            try:
+                items.append(PickItem.model_validate_json(line))
+            except ValidationError as error:
+                raise click.ClickException(f"{path}:{number}: {error}") from error
+    return items
+
+
+@main.command()
+@click.option(
+    "--input",
+    "input_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="One JSON object per line: an episode, its staged mentions with their "
+    "candidates, and the entities its metadata names.",
+)
+@click.option(
+    "--out",
+    "out_dir",
+    required=True,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Directory for picks.jsonl, episodes.jsonl and manifest.json.",
+)
+@click.option(
+    "--replay",
+    is_flag=True,
+    help="Serve every reply from the cache; a miss stops the run. Makes no request.",
+)
+@click.option(
+    "--concurrency", default=8, show_default=True, help="Episodes picked at once."
+)
+def pick(input_path: Path, out_dir: Path, replay: bool, concurrency: int) -> None:
+    """Link staged mentions to their candidates: one model call per episode.
+
+    Each staged mention gets one of its candidates or none, checked without a
+    model. A pick links; it writes nothing.
+
+    Exit status: 0 when every call answered; 75 when some failed at the
+    provider, which a rerun retries; 1 when the run stopped or every call failed.
+    """
+    from schemacast.output import save_picks
+    from schemacast.pick import Picker
+
+    settings = SchemaCastSettings()
+    if replay:
+        settings.cache = settings.cache.model_copy(update={"require_hit": True})
+    items = read_pick_items(input_path)
+    picker = Picker(settings=settings, max_concurrent_episodes=concurrency)
+    try:
+        result = asyncio.run(picker.pick(items))
+    except (LLMConfigurationError, CacheMissError) as error:
+        raise click.ClickException(str(error)) from error
+    save_picks(result, out_dir)
+    manifest = result.manifest
+    click.echo(
+        f"{manifest.episodes} episodes, {manifest.mentions} staged mentions: "
+        f"{manifest.picked} picked, {manifest.none} none, {manifest.rejected} "
+        f"rejected; {manifest.failed} episode(s) failed -> {out_dir}",
+        err=True,
+    )
+    asked = [e for e in result.episodes if e.status != "skipped"]
+    if asked and all(e.status == "failed" for e in asked):
+        raise SystemExit(1)
+    if any(e.failure == "provider_error" for e in result.episodes):
+        raise SystemExit(EX_TEMPFAIL)
+
+
 @main.command()
 @click.option(
     "--host", help="Address to bind; default SCHEMACAST_SERVE_HOST or 127.0.0.1."
 )
 @click.option("--port", type=int, help="Port; default SCHEMACAST_SERVE_PORT or 8997.")
 def serve(host: str | None, port: int | None) -> None:
-    """Serve POST /cast over HTTP (needs the `server` extra).
+    """Serve POST /cast and POST /pick over HTTP (needs the `server` extra).
 
     Every request needs `Authorization: Bearer $SCHEMACAST_SERVE_API_KEY`; without
     a key the service refuses to cast unless SCHEMACAST_SERVE_ALLOW_ANONYMOUS is

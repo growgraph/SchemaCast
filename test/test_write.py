@@ -1,5 +1,6 @@
 """Writing a cast through graflo: the file backend here, Neo4j on request."""
 
+import json
 import os
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from graflo.db.manager import ConnectionManager
 
 from schemacast.cast import SchemaCaster
 from schemacast.episode import Episode
+from schemacast.output import staged_lines
 from schemacast.schema_io import load_schema
 from schemacast.write import load_connection, write_cast
 
@@ -131,17 +133,23 @@ async def test_secondary_identity_mentions_are_looked_up(cast, tmp_path):
 
     result = await cast([CALL], {"m2": [CALL_REPLY]})
     # Without the database, neither phone number identifies anyone.
-    assert [s.mention.ref for s in result.resolution.staged.mentions] == ["p", "q"]
+    assert [s.record.ref for s in result.resolution.staged.records] == ["p", "q"]
     written, _ = await write_cast(result, conf)
 
     assert written.identity_of("m2", "p") == {"email": "ann@x.com"}
-    assert [(s.mention.ref, s.reason) for s in written.staged.mentions] == [
+    assert [(s.record.ref, s.reason) for s in written.staged.records] == [
         ("q", "unmatched")
     ]
     with ConnectionManager(connection_config=conf) as conn:
         edges = conn.fetch_all_edges("Person", "Machine", "OPERATES")
     assert len(edges) == 2
     assert all(edge[0] == {"email": "ann@x.com"} for edge in edges)
+
+    lines = [json.loads(line) for line in staged_lines(written).splitlines()]
+    assert [(line["record"]["ref"], line["reason"]) for line in lines[:1]] == [
+        ("q", "unmatched")
+    ]
+    assert all(line["waiting_on"] == ["q"] for line in lines[1:])
 
 
 def test_load_connection(tmp_path):

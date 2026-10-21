@@ -45,7 +45,7 @@ async def test_the_tickets_example_casts_into_mentions_and_resolves(make_client)
     # What the texts name without a key waits, with its reason: the customer
     # known by email only, and "the customer" and "replacement dimmer" of a note.
     staged = result.resolution.staged
-    assert [(s.source_id, s.mention.type, s.reason) for s in staged.mentions] == [
+    assert [(s.source_id, s.record.type, s.reason) for s in staged.records] == [
         ("mail-1042", "Customer", "unmatched"),
         ("note-88", "Customer", "no_key"),
         ("note-88", "Product", "no_key"),

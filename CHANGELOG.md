@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`pick`**: links an episode's staged mentions to the candidates graflo gathers
+  (`gather_candidates`) and to the entities its metadata names, in one call: per mention, a
+  candidate id from an enum or `none`, checked without a model. `schemacast pick`, `POST /pick`,
+  `Picker`, `apply_picks` (a pick links, never writes); cached and replayable like the cast.
+- Bench corpus 1.2.0: `pick.yaml` in the `mention` family, scored as *Pick* (correct, wrong links,
+  rejected).
 - **`cast` exit status by cause:** 0 when every failure is about the episode itself, 75 when some
   episodes failed at the provider (a rerun retries them), 1 when the run stopped or every episode
   failed. The summary names failures by kind.
@@ -27,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `unresolved.jsonl`; groundings name mention refs (`ref`, `source_ref`, `target_ref`) instead of
   identities; `POST /cast` returns `mentions` and `staged`; `write_cast` returns the database's
   resolution with the report.
+- Output format version 5, on graflo's record API (`graflo.link`): `mentions` (file and `POST /cast`)
+  are graflo `RecordGraph`s with each quote and span in `evidence`; `staged` holds `StagedRecord`s
+  and `/pick` takes `StagedCandidates` with `record`; `unmapped` is SchemaCast's, per episode.
 - `identity_insufficient` no longer removes the mention: it asks one repair for a key the reply may
   have left out.
 - An endpoint that no request of the run has reached stops the run as a configuration error.

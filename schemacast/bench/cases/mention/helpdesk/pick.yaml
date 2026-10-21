@@ -1,0 +1,26 @@
+# For each staged mention: the candidates a resolver gathers, the entities the
+# record names, and the pick a careful reader makes (null: none fits).
+mention-helpdesk-1:
+    entities:
+    -   type: Agent
+        key:
+            handle: kim
+        label: Kim Ross
+        role: speaker
+    -   type: Customer
+        key:
+            account: ACC-12
+        label: Priya Nair
+        role: thread
+    mentions:
+        c:
+            candidates:
+            -   type: Customer
+                key:
+                    account: ACC-31
+                label: Jo Andersson
+                lane: relation
+                relation: RAISED
+                anchor: t
+            pick:
+                account: ACC-31

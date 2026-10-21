@@ -1,6 +1,6 @@
 # Running as a service
 
-`schemacast serve` casts over HTTP. It suits a platform that holds the schema and
+`schemacast serve` casts and picks over HTTP. It suits a platform that holds the schema and
 writes the graph itself: the service receives the schema with the episodes,
 casts them, and returns the result. It never writes to a database and never
 calls back, so it holds no database credentials.
@@ -29,11 +29,14 @@ schemacast serve --port 8997
 endpoint.
 
 The reply holds what [`schemacast cast --out`](../reference/output.md) writes:
-`mentions` (one mention graph per episode), `graph` (graflo's `GraFloOutput` of
-what the keys identify without a database), `staged`, `groundings`,
-`quarantine`, `episodes` and `manifest`. To write, pass `mentions` to graflo's
-`write_mention_graphs`, the function `write_cast` uses: it resolves them
-against the target first.
+`mentions` (one graflo `RecordGraph` per episode; each record, relation and
+property carries `evidence`: `{"quote": …, "span": {"start": …, "end": …}}`,
+`span.context` when read in a context item), `graph` (graflo's `GraFloOutput`
+of what the keys identify without a database), `staged` (graflo `Staged`:
+`records` of `StagedRecord`, and held `relations`), `groundings`, `unmapped`
+(by episode `source_id`: `quote`, `note`, `span`), `quarantine`, `episodes` and
+`manifest`. To write, pass `mentions` to graflo's `write_record_graphs`, the
+function `write_cast` uses: it resolves them against the target first.
 
 | Status | Means |
 |---|---|
@@ -45,6 +48,23 @@ against the target first.
 
 The request is synchronous: the reply comes when every episode is cast. Keep
 batches small enough for the caller's timeout.
+
+## `POST /pick`
+
+```json
+{
+  "episodes": [{"episode": {…}, "staged": [{…}], "entities": [{…}], "graph": {…}}],
+  "options": {"user_instruction": "…"}
+}
+```
+
+Each entry is a [pick input](pick.md#command-line): an episode, its staged
+mentions as graflo `StagedCandidates` (the mention in `record`), and the
+entities its metadata names. The
+reply holds `picks` (one per staged mention, in order: `source_id`, `ref`,
+`type`, `outcome`, `candidate`, `detail`), `episodes` and `manifest`. A
+`picked` mention is closed by the caller with `candidate.key`. Statuses as for
+`/cast`; a cache miss under `SCHEMACAST_CACHE_REQUIRE_HIT` is 409.
 
 ## Authentication
 

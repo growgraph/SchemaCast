@@ -7,6 +7,7 @@ import pytest
 from conftest import DATA
 
 from schemacast.extract import WireExtraction
+from schemacast.ground import span_of
 from schemacast.schema_io import load_schema
 from schemacast.validate import validate
 
@@ -92,8 +93,10 @@ def test_an_unmapped_quote_outside_the_text_is_dropped(plant):
 def test_spans_point_at_the_quotes(plant):
     result = _check(plant, GOOD)
     machine = result.mentions[1]
-    assert TEXT[machine.span.start : machine.span.end] == "press S-7"
-    power = machine.props["power"].span
+    span = span_of(machine.evidence)
+    assert span is not None and TEXT[span.start : span.end] == "press S-7"
+    power = span_of(machine.props["power"].evidence)
+    assert power is not None
     assert TEXT[power.start : power.end] == "200 kW"
 
 
@@ -205,7 +208,7 @@ def test_a_reference_without_a_key_is_kept_for_resolution(plant):
     work_order = {"ref": "w", "type": "WorkOrder", "quote": "S-7", "mention": True}
     result = _check(plant, {"vertices": [by_name, work_order]})
     assert result.findings == []
-    assert [(m.ref, m.introduces) for m in result.mentions] == [
+    assert [(m.ref, m.may_create) for m in result.mentions] == [
         ("v1", False),
         ("w", False),
     ]
@@ -283,8 +286,8 @@ def test_an_identity_value_grounds_in_context(plant):
     }
     result = validate(WireExtraction.model_validate(reply), plant, text, context)
     assert result.findings == []
-    span = result.mentions[0].props["serial"].span
-    assert span.context == "m0"
+    span = span_of(result.mentions[0].props["serial"].evidence)
+    assert span is not None and span.context == "m0"
     assert context[0].text[span.start : span.end] == "S-7"
     assert [f.kind for f in result.fixes] == ["grounded_in_context"]
 

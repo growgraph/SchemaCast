@@ -16,6 +16,10 @@ finding is left out, and the rest of the reply stands.
 Validation decides no identity. A mention that introduces an entity but states
 no complete key gets one non-removing finding, so a repair can ask for a key
 the reply left out; the mention is kept either way, and resolution decides.
+
+Kept mentions and relations are graflo records (``PartialRecord``,
+``RecordRelation``); each one's quote and span, and each property's, are its
+``evidence`` (:func:`schemacast.ground.evidence`).
 """
 
 from __future__ import annotations
@@ -25,25 +29,24 @@ from collections.abc import Sequence
 from typing import Any, Literal
 
 from graflo.architecture.graph_types.identifiers import EdgeId
-from graflo.architecture.graph_types.mention import (
-    Mention,
-    MentionGraph,
-    Relation,
-    StatedProp,
-    UnmappedText,
-)
 from graflo.architecture.schema.coerce import CoercionError, coerce_value
 from graflo.architecture.schema.context import extractable_properties
 from graflo.architecture.schema.document import Schema
 from graflo.architecture.schema.edge import Edge
 from graflo.architecture.schema.key_contract import key_contract, key_status
 from graflo.architecture.schema.vertex import Field as SchemaField
+from graflo.link.records import (
+    PartialRecord,
+    RecordGraph,
+    RecordRelation,
+    StatedProp,
+)
 from pydantic import BaseModel, Field
 
 from schemacast.episode import ContextItem
 from schemacast.extract import WireExtraction, WireProp
 from schemacast.fidelity import value_mismatch
-from schemacast.ground import Span, locate
+from schemacast.ground import Span, UnmappedText, evidence, locate
 
 FindingKind = Literal[
     "duplicate_ref",
@@ -118,8 +121,8 @@ class Fix(BaseModel):
 class Validation(BaseModel):
     """The checked reply."""
 
-    mentions: list[Mention] = Field(default_factory=list)
-    relations: list[Relation] = Field(default_factory=list)
+    mentions: list[PartialRecord] = Field(default_factory=list)
+    relations: list[RecordRelation] = Field(default_factory=list)
     unmapped: list[UnmappedText] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
     fixes: list[Fix] = Field(default_factory=list)
@@ -146,15 +149,14 @@ class Validation(BaseModel):
 
     def graph(
         self, source_id: str, schema_ref: str, reference_time: Any = None
-    ) -> MentionGraph:
-        """The mention graph this reply states."""
-        return MentionGraph(
+    ) -> RecordGraph:
+        """The record graph this reply states; ``unmapped`` stays here."""
+        return RecordGraph(
             source_id=source_id,
             schema_ref=schema_ref,
             reference_time=reference_time,
-            mentions=self.mentions,
+            records=self.mentions,
             relations=self.relations,
-            unmapped=self.unmapped,
         )
 
 
@@ -266,7 +268,9 @@ class _Checker:
                 continue
             if value != prop.value:
                 self.fix("coerced", prop_path, f"{prop.value!r} -> {value!r}")
-            stated[prop.name] = StatedProp(value=value, quote=prop.quote, span=span)
+            stated[prop.name] = StatedProp(
+                value=value, evidence=evidence(prop.quote, span)
+            )
         return stated
 
     def key_gap(
@@ -340,13 +344,12 @@ class _Checker:
                     kind="identity_insufficient", message=gap, removes=False, **common
                 )
             self.result.mentions.append(
-                Mention(
+                PartialRecord(
                     ref=wv.ref,
                     type=wv.type,
-                    introduces=introduces,
-                    quote=wv.quote,
-                    span=span,
+                    may_create=introduces,
                     props=props,
+                    evidence=evidence(wv.quote, span),
                 )
             )
         return refs
@@ -414,13 +417,12 @@ class _Checker:
                 )
                 continue
             self.result.relations.append(
-                Relation(
+                RecordRelation(
                     edge_id=edge.edge_id,
                     source=source_ref,
                     target=target_ref,
-                    quote=we.quote,
-                    span=span,
                     props=props,
+                    evidence=evidence(we.quote, span),
                 )
             )
 

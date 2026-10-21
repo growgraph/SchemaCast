@@ -18,8 +18,9 @@ if TYPE_CHECKING:
     from schemacast.cast import CastResult, EpisodeResult, SchemaCaster
     from schemacast.config import CacheSettings, LLMSettings, SchemaCastSettings
     from schemacast.episode import Episode, read_episodes
-    from schemacast.ground import Grounding
-    from schemacast.output import save_cast
+    from schemacast.ground import Grounding, TextSpan, UnmappedText
+    from schemacast.output import save_cast, save_picks
+    from schemacast.pick import Pick, Picker, PickItem, PickResult, apply_picks
     from schemacast.schema_io import load_schema
     from schemacast.sink import JsonlQuarantineSink, MemoryQuarantineSink
     from schemacast.write import WriteReport, load_connection, write_cast
@@ -34,7 +35,15 @@ _EXPORTS: dict[str, str] = {
     "LLMSettings": "schemacast.config",
     "SchemaCastSettings": "schemacast.config",
     "SchemaCaster": "schemacast.cast",
+    "TextSpan": "schemacast.ground",
+    "UnmappedText": "schemacast.ground",
     "MemoryQuarantineSink": "schemacast.sink",
+    "Pick": "schemacast.pick",
+    "PickItem": "schemacast.pick",
+    "PickResult": "schemacast.pick",
+    "Picker": "schemacast.pick",
+    "apply_picks": "schemacast.pick",
+    "save_picks": "schemacast.output",
     "WriteReport": "schemacast.write",
     "load_connection": "schemacast.write",
     "load_schema": "schemacast.schema_io",
@@ -52,14 +61,22 @@ __all__ = [
     "JsonlQuarantineSink",
     "LLMSettings",
     "MemoryQuarantineSink",
+    "Pick",
+    "PickItem",
+    "PickResult",
+    "Picker",
     "SchemaCastSettings",
     "SchemaCaster",
+    "TextSpan",
+    "UnmappedText",
     "WriteReport",
     "__version__",
+    "apply_picks",
     "load_connection",
     "load_schema",
     "read_episodes",
     "save_cast",
+    "save_picks",
     "write_cast",
 ]
 

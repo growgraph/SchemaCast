@@ -1,0 +1,19 @@
+# For each staged mention: the candidates a resolver gathers, the entities the
+# record names, and the pick a careful reader makes (null: none fits).
+mention-plant-1:
+    mentions:
+        p:
+            candidates:
+            -   type: Person
+                key:
+                    email: lars@plant.example
+                label: Lars Berg
+                lane: alternate
+                matched: phone=+47 555 0199
+            -   type: Person
+                key:
+                    email: ingrid@plant.example
+                label: Ingrid Dahl
+                lane: alternate
+                matched: phone=+47 555 0199
+            pick:

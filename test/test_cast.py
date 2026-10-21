@@ -135,6 +135,8 @@ async def test_casts_episodes_into_one_container(make_caster):
     assert result.manifest.vertices == 3
     assert [r.record for r in sink.records] == ["unmapped"]
     assert sink.records[0].char_start is not None
+    assert [u.quote for u in result.unmapped["m2"]] == ["Opened a work order"]
+    assert list(result.unmapped) == ["m2"]
 
 
 async def test_a_finding_is_repaired_with_a_typed_prompt(make_caster):

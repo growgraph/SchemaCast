@@ -2,8 +2,11 @@
 each text states.
 
 A case is data, never code: ``cases/<family>/<instance>/`` holds ``case.yaml``,
-``episodes.jsonl`` and ``expected.yaml``. ``case.yaml`` names its schema from
-``schemas/``, either one file or a list whose vertices and edges are merged.
+``episodes.jsonl`` and ``expected.yaml``, and optionally ``pick.yaml``: for an
+episode's staged mentions, the candidates a resolver would gather, the entities
+the record names and the pick a careful reader makes. ``case.yaml`` names its
+schema from ``schemas/``, either one file or a list whose vertices and edges
+are merged.
 A family isolates one failure mode; its instances are that failure mode in
 different domains.
 
@@ -35,10 +38,10 @@ SPLITS_FILE = CASES_DIR / "SPLITS.yaml"
 
 #: Bump whenever a case, schema or split assignment changes. Results from
 #: different versions are not comparable.
-CORPUS_VERSION = "1.1.0"
+CORPUS_VERSION = "1.2.0"
 
 #: Content hash of ``cases/`` and ``schemas/`` at :data:`CORPUS_VERSION`.
-CORPUS_DIGEST = "9378eb758efbd539a103b1819254704271f4f6e4f3447ae021297ec405ed23ee"
+CORPUS_DIGEST = "62a0496dfb26492a0b851d9ceb02cd11f5a9a63037b9dc4fc1d7b6472a9d8dcb"
 
 Split = Literal["dev", "test"]
 
@@ -136,6 +139,44 @@ class ExpectedEpisode(ExpectedGraph):
     forbidden: ExpectedGraph = Field(default_factory=ExpectedGraph)
 
 
+class ExpectedCandidate(BaseModel):
+    """An entity offered to a pick, as graflo's ``EntityCandidate`` holds it.
+
+    ``anchor`` names an expected vertex handle of the same episode.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    key: dict[str, Any]
+    label: str | None = None
+    lane: str = "metadata"
+    matched: str | None = None
+    relation: str | None = None
+    anchor: str | None = None
+    role: str | None = None
+
+
+class ExpectedPickMention(BaseModel):
+    """One staged mention's candidates and the right pick (null: none fits)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    candidates: list[ExpectedCandidate] = Field(default_factory=list)
+    pick: dict[str, Any] | None = None
+
+
+class ExpectedPicks(BaseModel):
+    """``pick.yaml`` for one episode: mentions by expected vertex handle."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    entities: list[ExpectedCandidate] = Field(
+        default_factory=list, description="Entities the record's metadata names."
+    )
+    mentions: dict[str, ExpectedPickMention] = Field(default_factory=dict)
+
+
 class CaseSettings(BaseModel):
     """Settings a case pins, e.g. a slice budget tight enough to select."""
 
@@ -174,6 +215,7 @@ class BenchCase(BaseModel):
     settings: CaseSettings
     episodes: list[Episode]
     expected: dict[str, ExpectedEpisode]
+    picks: dict[str, ExpectedPicks] = Field(default_factory=dict)
     digest: str = Field(
         description="SHA-256 of the case's files, its split and its schemas: "
         "two runs compare on a case only when this matches."
@@ -248,12 +290,24 @@ def load_case(
         raise ValueError(
             f"{name}: episodes {sorted(ids)} and expected {sorted(expected)} differ"
         )
+    pick_file = directory / "pick.yaml"
+    picks = {
+        source_id: ExpectedPicks.model_validate(item or {})
+        for source_id, item in (
+            (_read_yaml(pick_file) or {}) if pick_file.exists() else {}
+        ).items()
+    }
+    for source_id, item in picks.items():
+        vertices = expected[source_id].vertices if source_id in expected else None
+        if vertices is None or not set(item.mentions) <= set(vertices):
+            raise ValueError(f"{name}: pick.yaml names an unknown episode or handle")
     parts = [meta.schema_] if isinstance(meta.schema_, str) else meta.schema_
     digest = hashlib.sha256(f"{name}\0{assignment[name]}".encode())
     for path in [
         directory / "case.yaml",
         directory / "episodes.jsonl",
         directory / "expected.yaml",
+        *([pick_file] if pick_file.exists() else []),
         *(schemas_dir / f"{part}.yaml" for part in parts),
     ]:
         digest.update(path.name.encode("utf-8"))
@@ -269,6 +323,7 @@ def load_case(
         settings=meta.settings,
         episodes=episodes,
         expected=expected,
+        picks=picks,
         digest=digest.hexdigest(),
     )
 

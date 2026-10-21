@@ -47,20 +47,29 @@ def test_heavy_frameworks_are_not_installed():
     assert offending == []
 
 
-def test_import_loads_nothing_heavy():
+def _loaded(modules: str) -> str:
     probe = (
-        "import sys, schemacast, schemacast.cli, schemacast.config, schemacast.llm, schemacast.episode, "
-        "schemacast.select, schemacast.prompt, schemacast.extract, schemacast.validate, schemacast.repair, "
-        "schemacast.ground, schemacast.sink, schemacast.cast, schemacast.output, schemacast.write, "
-        "schemacast.schema_io, schemacast.bench.cli, schemacast.bench.corpus, schemacast.bench.score, "
-        "schemacast.bench.oracle, schemacast.bench.run, schemacast.bench.report, "
-        "graflo.hq.mention_resolve\n"
+        f"import sys, {modules}\n"
         f"print(','.join(m for m in {NOT_IMPORTED!r} if m in sys.modules))"
     )
-    loaded = subprocess.run(
+    return subprocess.run(
         [sys.executable, "-c", probe], capture_output=True, text=True, check=True
     ).stdout.strip()
+
+
+def test_import_loads_nothing_heavy():
+    loaded = _loaded(
+        "schemacast, schemacast.cli, schemacast.config, schemacast.llm, schemacast.episode, "
+        "schemacast.select, schemacast.prompt, schemacast.extract, schemacast.validate, schemacast.repair, "
+        "schemacast.ground, schemacast.sink, schemacast.cast, schemacast.output, schemacast.write, "
+        "schemacast.schema_io, schemacast.pick, schemacast.bench.cli, schemacast.bench.corpus, schemacast.bench.score, "
+        "schemacast.bench.oracle, schemacast.bench.run, schemacast.bench.report"
+    )
     assert loaded == ""
+
+
+def test_resolving_a_cast_loads_nothing_heavy():
+    assert _loaded("graflo.link.resolve") == ""
 
 
 def test_the_top_level_names_resolve_lazily():

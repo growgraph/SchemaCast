@@ -5,10 +5,11 @@ jo@example.com raised HD-4415" names a customer by an alternate key and a ticket
 by its number, and says nothing else about either. SchemaCast therefore splits
 the work in two:
 
-1. **Cast** — the model reads the text into a **mention graph**: each entity the
-   text names (a *mention*: its type, the properties the text states, where it
-   states them) and the relations the text states between them. Nothing here
-   decides which entity a mention is.
+1. **Cast** — the model reads the text into a **record graph** (graflo
+   `RecordGraph`): each entity the text names (a *mention*, a graflo
+   `PartialRecord`: its type and the properties the text states, with the quote
+   and span in `evidence`) and the relations the text states between them.
+   Nothing here decides which entity a mention is.
 2. **Resolve** — graflo identifies each mention by its keys, without a model:
    it becomes an *entity* of the graph, or it is **staged** with the reason, to
    be resolved later.
@@ -44,14 +45,14 @@ The first rule that holds decides:
 | no key field | staged as `no_key` |
 
 A relation follows its endpoints: written when both resolve, otherwise held
-with the staged mention it waits on. A mention's `introduces` (the model's
+with the staged mention it waits on. A mention's `may_create` (the model's
 `mention: false`) matters only for a minted type; for every other type the key
 decides.
 
 **Partial keys never identify.** Nothing merges two vertices later, so a
 guessed identity would stay a duplicate. A staged mention keeps what the text
 states, so a later resolution — a re-run once the graph holds the entity, a
-known entity, a person — writes it then.
+[pick](../guides/pick.md) among candidates, a person — writes it then.
 
 **Connector-owned types are linked, never written.** When the schema comes in a
 manifest, a type that a connector-fed resource ingests is owned by that

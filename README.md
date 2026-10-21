@@ -64,7 +64,7 @@ result = asyncio.run(
 )
 ```
 
-`--out` gets each text's mention graph, what their keys identify, what is staged until a lookup
+`--out` gets each text's record graph, what their keys identify, what is staged until a lookup
 can identify it, a grounding per assertion, the quarantine, one result per text and a run
 manifest. `--replay` serves every reply from the cache and makes no
 request; everything but the manifest is byte-identical. Writing upserts by identity, so writing a

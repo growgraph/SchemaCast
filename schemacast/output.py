@@ -2,18 +2,21 @@
 
 | File | Holds | Same bytes on replay |
 |---|---|---|
-| ``mentions.jsonl`` | one mention graph per episode: what each text names | yes |
-| ``graph.json`` | the schema and what the mentions' keys identify (graflo ``GraFloOutput``) | yes |
-| ``staged.jsonl`` | mentions not identified, with why, and the relations they hold | yes |
-| ``groundings.jsonl`` | one grounding per mention, relation and property | yes |
+| ``mentions.jsonl`` | one graflo ``RecordGraph`` per episode: what each text names | yes |
+| ``graph.json`` | the schema and what the records' keys identify (graflo ``GraFloOutput``) | yes |
+| ``staged.jsonl`` | records not identified, with why, and the relations they hold | yes |
+| ``groundings.jsonl`` | one grounding per record, relation and property | yes |
 | ``episodes.jsonl`` | one result per episode | yes |
 | ``quarantine.jsonl`` | what was left out, and ``unmapped`` items | yes |
 | ``manifest.json`` | versions, settings, counts and usage | no: usage differs |
 | ``write.json`` | what was sent to the database, when one was given | — |
 
+A pick (``save_picks``) writes ``picks.jsonl`` (one pick per staged record),
+``episodes.jsonl`` and ``manifest.json`` to its own directory.
+
 With a database, ``staged.jsonl`` holds what is still staged after the lookups
-there. ``manifest.json`` names the ``output_format_version``. Version 4: a cast
-is a mention graph, resolved by keys; groundings name mention refs.
+there. ``manifest.json`` names the ``output_format_version``. Version 5: a cast
+is a record graph, quotes and spans in ``evidence``; ``unmapped`` is outside it.
 """
 
 from __future__ import annotations
@@ -28,7 +31,9 @@ from pydantic import BaseModel
 from schemacast.cast import CastResult
 
 if TYPE_CHECKING:
-    from graflo.architecture.graph_types.mention import Resolution
+    from graflo.link.records import Resolution
+
+    from schemacast.pick import PickResult
 
 QUARANTINE_FILE = "quarantine.jsonl"
 STAGED_FILE = "staged.jsonl"
@@ -49,20 +54,10 @@ def _jsonl(models: Iterable[BaseModel]) -> str:
 
 
 def staged_lines(resolution: Resolution) -> str:
-    """Staged mentions, then held relations, one JSON object per line."""
+    """Staged records (a ``record`` key), then held relations (a ``relation``
+    key), one JSON object per line."""
     staged = resolution.staged
-    return "".join(
-        [
-            _line({"record": "mention", **m.model_dump(mode="json", exclude_none=True)})
-            for m in staged.mentions
-        ]
-        + [
-            _line(
-                {"record": "relation", **r.model_dump(mode="json", exclude_none=True)}
-            )
-            for r in staged.relations
-        ]
-    )
+    return _jsonl([*staged.records, *staged.relations])
 
 
 def save_cast(
@@ -95,4 +90,16 @@ def save_cast(
         (out / "write.json").write_text(
             _json(write_report.model_dump(mode="json")) + "\n", encoding="utf-8"
         )
+    return out
+
+
+def save_picks(result: PickResult, out_dir: str | Path) -> Path:
+    """Write a pick run under *out_dir* (created if needed); returns the directory."""
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "picks.jsonl").write_text(_jsonl(result.picks), encoding="utf-8")
+    (out / "episodes.jsonl").write_text(_jsonl(result.episodes), encoding="utf-8")
+    (out / "manifest.json").write_text(
+        _json(result.manifest.model_dump(mode="json")) + "\n", encoding="utf-8"
+    )
     return out

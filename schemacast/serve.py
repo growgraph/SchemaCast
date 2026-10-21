@@ -1,12 +1,15 @@
 """``schemacast serve``: casting over HTTP, for a platform that holds the schema.
 
-One stateless, synchronous route: ``POST /cast`` takes a schema inline, the
+Two stateless, synchronous routes. ``POST /cast`` takes a schema inline, the
 episodes and options, and returns what ``schemacast cast --out`` writes — the
-mention graphs, what their keys identify, what is staged, groundings,
-quarantine, episode results and the run manifest. The caller writes: it
-resolves the mention graphs against its database (graflo
-``write_mention_graphs``). The service never writes to a database and never calls back to the
-caller, so it holds no database credentials and needs no URL allow-list.
+record graphs (``mentions``), what their keys identify, what is staged,
+groundings, unmapped text, quarantine, episode results and the run manifest.
+The caller writes: it resolves the record graphs against its database (graflo
+``write_record_graphs``). ``POST /pick`` takes episodes with their staged
+records and candidates (graflo ``gather_candidates``) and returns one pick per
+staged record; the caller closes what was picked. The service never writes to
+a database and never calls back to the caller, so it holds no database
+credentials and needs no URL allow-list.
 
 The key is fail-closed: every route but ``/health`` needs
 ``Authorization: Bearer <SCHEMACAST_SERVE_API_KEY>``, and without a configured
@@ -24,16 +27,17 @@ from importlib.metadata import version
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from graflo.architecture.graph_types.mention import MentionGraph, Staged
+from graflo.link.records import RecordGraph, Staged
 from pydantic import BaseModel, ConfigDict, Field
 
 from schemacast import __version__
 from schemacast.cast import EpisodeResult, RunManifest, SchemaCaster
 from schemacast.config import SchemaCastSettings, ServeSettings
 from schemacast.episode import Episode
-from schemacast.ground import Grounding
+from schemacast.ground import Grounding, UnmappedText
 from schemacast.llm.cache import CacheMissError, LLMCache
 from schemacast.llm.client import LLMClient, LLMConfigurationError
+from schemacast.pick import Picker, PickItem, PickResult
 from schemacast.schema_io import schema_from_mapping
 from schemacast.sink import MemoryQuarantineSink, QuarantineRecord
 
@@ -62,17 +66,45 @@ class CastRequest(BaseModel):
 class CastResponse(BaseModel):
     """What ``schemacast cast --out`` writes, in one body."""
 
-    mentions: list[MentionGraph] = Field(
-        description="One mention graph per episode cast: what to resolve and write."
+    mentions: list[RecordGraph] = Field(
+        description=(
+            "One graflo ``RecordGraph`` per episode cast: what to resolve and "
+            "write. Each record, relation and property carries its quote and "
+            "span in ``evidence``."
+        )
     )
     graph: dict[str, Any] = Field(
         description="graflo ``GraFloOutput``: what the keys identify without a database."
     )
-    staged: Staged = Field(description="Mentions not identified without a database.")
+    staged: Staged = Field(
+        description="Records not identified without a database (``StagedRecord``)."
+    )
     groundings: list[Grounding]
+    unmapped: dict[str, list[UnmappedText]] = Field(
+        default_factory=dict,
+        description="By episode source id: what the text states that no type covers.",
+    )
     quarantine: list[QuarantineRecord]
     episodes: list[EpisodeResult]
     manifest: RunManifest
+
+
+class PickOptions(BaseModel):
+    """Per-request pick settings; each one left out takes the service's value."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_instruction: str | None = None
+
+
+class PickRequest(BaseModel):
+    """Episodes, each with its staged records, their candidates and the
+    entities its metadata names."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    episodes: list[PickItem] = Field(min_length=1)
+    options: PickOptions = Field(default_factory=PickOptions)
 
 
 class Health(BaseModel):
@@ -156,10 +188,28 @@ def create_app(
             graph=result.output.to_dict(),
             staged=result.resolution.staged,
             groundings=result.groundings,
+            unmapped=result.unmapped,
             quarantine=sink.records,
             episodes=result.episodes,
             manifest=result.manifest,
         )
+
+    @app.post("/pick", dependencies=[Depends(require_key)])
+    async def pick(request: PickRequest) -> PickResult:
+        if len(request.episodes) > serve.max_episodes:
+            raise HTTPException(
+                413,
+                f"{len(request.episodes)} episodes; at most {serve.max_episodes} "
+                "per request.",
+            )
+        overrides = request.options.model_dump(exclude_none=True)
+        picker = Picker(settings=settings.model_copy(update=overrides), client=shared)
+        try:
+            return await picker.pick(request.episodes)
+        except LLMConfigurationError as error:
+            raise HTTPException(503, f"The model is misconfigured: {error}") from error
+        except CacheMissError as error:
+            raise HTTPException(409, str(error)) from error
 
     return app
 

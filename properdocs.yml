@@ -87,6 +87,7 @@ nav:
     -   Preparing a schema: guides/schema.md
     -   Replay and the cache: guides/replay.md
     -   Writing to a database: guides/database.md
+    -   Linking staged mentions: guides/pick.md
     -   Running as a service: guides/serve.md
     -   The benchmark: guides/benchmark.md
 -   Reference:

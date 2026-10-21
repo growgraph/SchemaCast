@@ -3,6 +3,11 @@
 The model copies a quote; SchemaCast finds it in the episode and records the
 character offsets. Offsets are never taken from the model. A quote that cannot
 be found is a hallucination flag, handled by validation.
+
+A cast's record graph carries each quote and span in graflo's ``evidence``,
+as ``{"quote": str, "span": {"start": int, "end": int, "context": str}}``
+(``context`` only when set); :func:`evidence`, :func:`quote_of` and
+:func:`span_of` write and read it.
 """
 
 from __future__ import annotations
@@ -12,8 +17,8 @@ from datetime import datetime
 from typing import Any, Literal
 
 from graflo.architecture.graph_types.identifiers import EdgeId
-from graflo.architecture.graph_types.mention import MentionGraph, TextSpan
-from pydantic import BaseModel, Field
+from graflo.link.records import RecordGraph
+from pydantic import BaseModel, ConfigDict, Field
 
 from schemacast.episode import Episode
 
@@ -45,9 +50,47 @@ _TYPOGRAPHIC = str.maketrans(
 )
 
 
-#: Character offsets, end exclusive, into the episode's text or, when
-#: ``context`` is set, into the text of that context item.
+class TextSpan(BaseModel):
+    """Character offsets, end exclusive, into the episode's text, or into the
+    text of the context item ``context`` names."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    start: int
+    end: int
+    context: str | None = Field(
+        default=None, description="Source id of the context item, if not the text."
+    )
+
+
 Span = TextSpan
+
+
+class UnmappedText(BaseModel):
+    """Something the text states that no type covers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    quote: str
+    note: str
+    span: TextSpan
+
+
+def evidence(quote: str, span: TextSpan) -> dict[str, Any]:
+    """The ``evidence`` of a record, relation or property read at *span*."""
+    return {"quote": quote, "span": span.model_dump(exclude_none=True)}
+
+
+def quote_of(evidence: dict[str, Any] | None) -> str | None:
+    """The quote an ``evidence`` holds, if any."""
+    quote = (evidence or {}).get("quote")
+    return quote if isinstance(quote, str) else None
+
+
+def span_of(evidence: dict[str, Any] | None) -> TextSpan | None:
+    """The span an ``evidence`` holds, if any."""
+    span = (evidence or {}).get("span")
+    return TextSpan.model_validate(span) if isinstance(span, dict) else None
 
 
 def _fold(char: str) -> str:
@@ -123,7 +166,7 @@ def locate(quote: str, text: str, *, near: Span | None = None) -> Span | None:
 class Grounding(BaseModel):
     """One assertion and the span of text it was read from.
 
-    A grounding names the mention or relation of the cast's mention graph it
+    A grounding names the record or relation of the cast's record graph it
     supports, by ref; resolution maps refs to entities. Carried in the cast
     result only; nothing here is written to the graph.
     """
@@ -134,16 +177,16 @@ class Grounding(BaseModel):
         default=None, description="Vertex type, for a vertex or its property."
     )
     ref: str | None = Field(
-        default=None, description="Mention ref, for a vertex or its property."
+        default=None, description="Record ref, for a vertex or its property."
     )
     edge: EdgeId | None = Field(
         default=None, description="Edge, for an edge or its property."
     )
     source_ref: str | None = Field(
-        default=None, description="Ref of the edge's source mention."
+        default=None, description="Ref of the edge's source record."
     )
     target_ref: str | None = Field(
-        default=None, description="Ref of the edge's target mention."
+        default=None, description="Ref of the edge's target record."
     )
     property: str | None = Field(
         default=None, description="Property name, for a property."
@@ -165,16 +208,20 @@ class Grounding(BaseModel):
 
 
 def groundings(
-    graph: MentionGraph,
+    graph: RecordGraph,
     episode: Episode,
     *,
     extractor: str,
     model: str | None = None,
 ) -> list[Grounding]:
-    """One grounding per mention, relation and stated property of *graph*."""
+    """One grounding per record, relation and stated property of *graph* whose
+    ``evidence`` holds a span."""
     out: list[Grounding] = []
 
-    def add(span: Span, **target: Any) -> None:
+    def add(found: dict[str, Any] | None, **target: Any) -> None:
+        span = span_of(found)
+        if span is None:
+            return
         text = episode.text
         if span.context is not None:
             text = [i.text for i in episode.context if i.source_id == span.context][-1]
@@ -193,18 +240,18 @@ def groundings(
             )
         )
 
-    for mention in graph.mentions:
-        target = {"vertex": mention.type, "ref": mention.ref}
-        add(mention.span, kind="vertex", **target)
-        for name, prop in mention.props.items():
-            add(prop.span, kind="property", property=name, **target)
+    for record in graph.records:
+        target = {"vertex": record.type, "ref": record.ref}
+        add(record.evidence, kind="vertex", **target)
+        for name, prop in record.props.items():
+            add(prop.evidence, kind="property", property=name, **target)
     for relation in graph.relations:
         target = {
             "edge": relation.edge_id,
             "source_ref": relation.source,
             "target_ref": relation.target,
         }
-        add(relation.span, kind="edge", **target)
+        add(relation.evidence, kind="edge", **target)
         for name, prop in relation.props.items():
-            add(prop.span, kind="property", property=name, **target)
+            add(prop.evidence, kind="property", property=name, **target)
     return out

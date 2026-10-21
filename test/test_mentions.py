@@ -1,11 +1,11 @@
-"""A reply becomes a mention graph; graflo resolves it by keys."""
+"""A reply becomes a record graph; graflo resolves it by keys."""
 
 import uuid
 
 import pytest
 from conftest import DATA
 from graflo.architecture.schema.identity_digest import compute_vertex_identity
-from graflo.hq.mention_resolve import promote, resolve_mentions
+from graflo.link.resolve import promote, resolve_records
 
 from schemacast.episode import Episode
 from schemacast.extract import WireExtraction
@@ -85,12 +85,12 @@ def _graph(plant, reply=REPLY, source_id="msg-1"):
 
 
 def _resolve(plant, reply=REPLY, source_id="msg-1"):
-    return resolve_mentions(plant, [_graph(plant, reply, source_id)])
+    return resolve_records(plant, [_graph(plant, reply, source_id)])
 
 
-def test_a_reply_becomes_a_mention_graph(plant):
+def test_a_reply_becomes_a_record_graph(plant):
     graph = _graph(plant)
-    assert [(m.ref, m.type, m.introduces) for m in graph.mentions] == [
+    assert [(r.ref, r.type, r.may_create) for r in graph.records] == [
         ("p1", "Person", True),
         ("m1", "Machine", True),
         ("s1", "Sensor", True),
@@ -98,7 +98,7 @@ def test_a_reply_becomes_a_mention_graph(plant):
         ("w1", "WorkOrder", True),
         ("p2", "Person", False),
     ]
-    assert graph.mentions[1].values() == {"serial": "S-7"}
+    assert graph.records[1].values() == {"serial": "S-7"}
     assert [(r.edge_id[2], r.source, r.target) for r in graph.relations] == [
         ("OPERATES", "p1", "m1"),
         ("MOUNTED_ON", "s1", "m1"),
@@ -118,7 +118,7 @@ def test_keys_identify_what_they_can_and_the_rest_is_staged(plant):
     assert identity["n1"] == {"id": "3587db98-ae28-5016-86fb-3d66a549861a"}
     uuid.UUID(identity["w1"]["id"])
     # Ben is named by phone only and nobody else states it.
-    assert [(s.mention.ref, s.reason) for s in resolution.staged.mentions] == [
+    assert [(s.record.ref, s.reason) for s in resolution.staged.records] == [
         ("p2", "unmatched")
     ]
     assert [h.waiting_on for h in resolution.staged.relations] == [["p2"]]
@@ -163,8 +163,8 @@ def test_an_entity_named_by_an_alternate_key_needs_no_repair(plant):
     }
     validation = _check(plant, reply)
     assert validation.findings == []
-    resolution = resolve_mentions(plant, [validation.graph("msg-1", "plant@2.0.0")])
-    assert [s.reason for s in resolution.staged.mentions] == ["unmatched"]
+    resolution = resolve_records(plant, [validation.graph("msg-1", "plant@2.0.0")])
+    assert [s.reason for s in resolution.staged.records] == ["unmatched"]
 
 
 def test_an_entity_with_no_key_asks_one_repair_and_is_kept(plant):
@@ -177,11 +177,11 @@ def test_an_entity_with_no_key_asks_one_repair_and_is_kept(plant):
     assert (finding.kind, finding.removes) == ("identity_insufficient", False)
     assert "email" in finding.message and "phone" in finding.message
     assert [m.ref for m in validation.mentions] == ["p"]
-    resolution = resolve_mentions(plant, [validation.graph("msg-1", "plant@2.0.0")])
-    assert [s.reason for s in resolution.staged.mentions] == ["no_key"]
+    resolution = resolve_records(plant, [validation.graph("msg-1", "plant@2.0.0")])
+    assert [s.reason for s in resolution.staged.records] == ["no_key"]
 
 
-def test_groundings_name_mention_refs(plant):
+def test_groundings_name_record_refs(plant):
     episode = Episode(text=TEXT, source_id="msg-1")
     found = groundings(_graph(plant), episode, extractor="schemacast/test", model="m")
     kinds = [g.kind for g in found]
@@ -193,3 +193,19 @@ def test_groundings_name_mention_refs(plant):
         assert grounding.schema_ref == "plant@2.0.0"
     edge = next(g for g in found if g.edge and g.edge[0] == "Sensor")
     assert (edge.source_ref, edge.target_ref) == ("s1", "m1")
+
+
+def test_quotes_and_spans_are_the_records_evidence(plant):
+    graph = _graph(plant)
+    machine = graph.records[1]
+    start = TEXT.index("press S-7")
+    assert machine.evidence == {
+        "quote": "press S-7",
+        "span": {"start": start, "end": start + len("press S-7")},
+    }
+    assert machine.props["serial"].evidence == {
+        "quote": "S-7",
+        "span": {"start": start + 6, "end": start + 9},
+    }
+    assert graph.relations[0].evidence["quote"] == "Ann (ann@x.com) operates press S-7"
+    assert "unmapped" not in graph.model_dump()

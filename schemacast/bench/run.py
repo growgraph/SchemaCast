@@ -18,16 +18,25 @@ from schemacast.bench.corpus import (
     CORPUS_VERSION,
     BenchCase,
     ExpectedEpisode,
+    ExpectedPicks,
     corpus_digest,
 )
-from schemacast.bench.oracle import ORACLE, oracle_client
-from schemacast.bench.score import Counts, score_episode, score_recast, total
-from schemacast.cast import SchemaCaster
+from schemacast.bench.oracle import ORACLE, oracle_client, oracle_pick_reply
+from schemacast.bench.score import (
+    Counts,
+    ref_handles,
+    score_episode,
+    score_picks,
+    score_recast,
+    total,
+)
+from schemacast.cast import EpisodeOutcome, SchemaCaster
 from schemacast.config import SchemaCastSettings
 from schemacast.episode import Episode
 from schemacast.llm.cache import LLMCache, cache_key_config, default_cache_dir
 from schemacast.llm.client import LLMClient
-from schemacast.llm.usage import track_usage
+from schemacast.llm.usage import UsageTracker, track_usage
+from schemacast.pick import PickItem, pick_episode
 
 #: Environment variable naming a JSON price table:
 #: ``{"<model>": {"input_per_1m": 0.15, "output_per_1m": 0.6}}``; keys starting
@@ -135,13 +144,18 @@ def recast_settings(base: SchemaCastSettings) -> SchemaCastSettings:
     return base.model_copy(update={"cache": cache})
 
 
-ClientFactory = Callable[[BenchCase, SchemaCastSettings], LLMClient]
+#: Oracle replies to pick calls, by episode source id, written before each call.
+PickScripts = dict[str, str]
+
+ClientFactory = Callable[[BenchCase, SchemaCastSettings, PickScripts], LLMClient]
 
 
 def model_clients(settings: SchemaCastSettings) -> ClientFactory:
     """Clients for the configured model, one cache per settings."""
 
-    def build(_case: BenchCase, case_settings_: SchemaCastSettings) -> LLMClient:
+    def build(
+        _case: BenchCase, case_settings_: SchemaCastSettings, _picks: PickScripts
+    ) -> LLMClient:
         return LLMClient(case_settings_.llm, LLMCache(case_settings_.cache))
 
     return build
@@ -150,10 +164,76 @@ def model_clients(settings: SchemaCastSettings) -> ClientFactory:
 def oracle_clients() -> ClientFactory:
     """Oracle clients, scripted per case."""
 
-    def build(case: BenchCase, _settings: SchemaCastSettings) -> LLMClient:
-        return oracle_client(case.expected)
+    def build(
+        case: BenchCase, _settings: SchemaCastSettings, picks: PickScripts
+    ) -> LLMClient:
+        return oracle_client(case.expected, picks)
 
     return build
+
+
+def _add_tokens(counts: Counts, usage: UsageTracker) -> None:
+    counts.input_tokens += (usage.billed.input_tokens or 0) + (
+        usage.replayed.input_tokens or 0
+    )
+    counts.output_tokens += (usage.billed.output_tokens or 0) + (
+        usage.replayed.output_tokens or 0
+    )
+    counts.billed_input_tokens += usage.billed.input_tokens or 0
+    counts.billed_output_tokens += usage.billed.output_tokens or 0
+
+
+def pick_item(
+    outcome: EpisodeOutcome,
+    episode: Episode,
+    spec: ExpectedPicks,
+    refs: dict[str, str],
+    schema: Any,
+) -> tuple[PickItem, dict[str, dict[str, Any] | None]]:
+    """The pick input for a cast episode's staged mentions the case gives
+    candidates for, and the expected key per mention ref."""
+    from graflo.link.records import EntityCandidate, StagedCandidates
+    from graflo.link.resolve import resolve_records
+
+    graph = outcome.graph
+    resolution = resolve_records(schema, [graph] if graph is not None else [])
+    by_handle = {handle: ref for ref, handle in refs.items()}
+
+    def entity(item: Any) -> EntityCandidate:
+        return EntityCandidate(
+            vertex_type=item.type,
+            key=item.key,
+            label=item.label,
+            lane=item.lane,
+            matched=item.matched,
+            relation=item.relation,
+            anchor=by_handle.get(item.anchor, item.anchor) if item.anchor else None,
+            role=item.role,
+        )
+
+    staged = []
+    wanted: dict[str, dict[str, Any] | None] = {}
+    for entry in resolution.staged.records:
+        handle = refs.get(entry.record.ref)
+        if handle not in spec.mentions:
+            continue
+        expected = spec.mentions[handle]
+        staged.append(
+            StagedCandidates(
+                source_id=entry.source_id,
+                record=entry.record,
+                reason=entry.reason,
+                candidates=[entity(c) for c in expected.candidates],
+            )
+        )
+        wanted[entry.record.ref] = expected.pick
+    item = PickItem(
+        episode=episode,
+        staged=staged,
+        entities=[entity(e) for e in spec.entities],
+        graph=graph,
+    )
+    return item, wanted
 
 
 async def _episode(
@@ -163,6 +243,7 @@ async def _episode(
     expected: ExpectedEpisode,
     case: BenchCase,
     gate: asyncio.Semaphore,
+    picks: PickScripts,
 ) -> EpisodeRecord:
     async with gate:
         with track_usage() as usage:
@@ -175,14 +256,21 @@ async def _episode(
             with track_usage() as again:
                 second = await recaster.cast_episode(episode)
             counts = counts + score_recast(outcome, second, case.schema_)
-            counts.input_tokens += (again.billed.input_tokens or 0) + (
-                again.replayed.input_tokens or 0
-            )
-            counts.output_tokens += (again.billed.output_tokens or 0) + (
-                again.replayed.output_tokens or 0
-            )
-            counts.billed_input_tokens += again.billed.input_tokens or 0
-            counts.billed_output_tokens += again.billed.output_tokens or 0
+            _add_tokens(counts, again)
+        spec = case.picks.get(episode.source_id)
+        if spec is not None:
+            refs = ref_handles(outcome, expected, case.schema_, episode.text, context)
+            item, wanted = pick_item(outcome, episode, spec, refs, case.schema_)
+            picks[episode.source_id] = json.dumps(oracle_pick_reply(item, wanted))
+            with track_usage() as picked:
+                found, result = await pick_episode(
+                    caster.client,
+                    item,
+                    user_instruction=caster.settings.user_instruction,
+                )
+            counts = counts + score_picks(found, refs, spec)
+            counts.requests += result.requests if result.status != "skipped" else 0
+            _add_tokens(counts, picked)
     return EpisodeRecord(
         source_id=episode.source_id,
         status=outcome.result.status,
@@ -205,12 +293,15 @@ async def run_case(
         CacheMissError: a miss while the cache requires hits.
     """
     pinned = case_settings(case, settings)
-    caster = SchemaCaster(case.schema_, settings=pinned, client=clients(case, pinned))
+    picks: PickScripts = {}
+    caster = SchemaCaster(
+        case.schema_, settings=pinned, client=clients(case, pinned, picks)
+    )
     recaster = None
     if case.recast:
         again = recast_settings(pinned)
         recaster = SchemaCaster(
-            case.schema_, settings=again, client=clients(case, again)
+            case.schema_, settings=again, client=clients(case, again, picks)
         )
     gate = asyncio.Semaphore(max(1, concurrency))
     try:
@@ -224,6 +315,7 @@ async def run_case(
                         case.expected[episode.source_id],
                         case,
                         gate,
+                        picks,
                     )
                 )
                 for episode in case.episodes

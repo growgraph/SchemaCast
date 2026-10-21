@@ -28,7 +28,7 @@ domains:
 | `direction` | same-type relations, passive voice, the target named first |
 | `units` | declared units, grouped digits, written-out dates and integers, yes/no flags |
 | `identity` | entities the text gives no identity, which must not be written |
-| `mention` | entities known by a secondary identity only; earlier assigned or blank entities that must not be minted again |
+| `mention` | entities known by a secondary identity only; earlier assigned or blank entities that must not be minted again; a pick among candidates for the staged ones |
 | `recast` | a second cast with a fresh model call |
 | `injection` | instructions inside the text |
 | `distractors` | a wide schema sliced under a tight budget, with types the text names but says nothing about |
@@ -36,7 +36,9 @@ domains:
 | `context` | a key stated only in an earlier text of the thread (`Episode.context`); everything else in the text itself |
 
 `expected.yaml` maps each episode to `vertices` (keyed by a handle), `edges` between handles, and
-`forbidden` items a cast must not write. Every quote occurs in the text (a property may instead
+`forbidden` items a cast must not write. An optional `pick.yaml` gives, for an episode's staged
+mentions (by handle), the candidates a resolver would gather, the entities the record names, and
+the expected `pick` (a key, or null when none fits). Every quote occurs in the text (a property may instead
 name the `context` item its quote is in, for an identity value only) and every value is what
 its field makes of it; a test checks both, and that the oracle scores perfectly on the whole
 schema.
@@ -70,7 +72,8 @@ Every metric is a ratio of counts pooled over episodes.
 | Forbidden | forbidden vertices resolution would write, and forbidden edges produced |
 | Seed / closure recall | expected types among the seeds and in the slice, read on sliced episodes only |
 | Re-cast added / duplicated | natural or hash identities a second cast adds; assigned or blank vertices it mints anew |
-| Tokens, requests per episode | billed and cache-replayed tokens alike |
+| Pick correct / wrong links | staged mentions whose pick links the expected entity (or nothing when none fits), over mentions with a `pick.yaml` entry; links to another entity, over all links |
+| Tokens, requests per episode | billed and cache-replayed tokens alike, pick calls included |
 
 Hallucination is measured against the slice the model was shown, so a type selection left out
 counts as well; the oracle row separates the two.

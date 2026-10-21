@@ -83,6 +83,8 @@ RATES: dict[str, Rate] = {
     "closure_edge_recall": lambda c: ratio(c.gold_edges_in_slice, c.gold_edges),
     "recast_added": lambda c: ratio(c.recast_added, c.recast_vertices),
     "recast_duplicated": lambda c: ratio(c.recast_duplicated, c.recast_minted),
+    "pick_accuracy": lambda c: ratio(c.picks_correct, c.picks_expected),
+    "pick_wrong_link": lambda c: ratio(c.picks_wrong, c.picks_linked),
     "tokens_per_episode": lambda c: ratio(c.input_tokens + c.output_tokens, c.episodes),
     "requests_per_episode": lambda c: ratio(c.requests, c.episodes),
 }
@@ -289,6 +291,38 @@ def to_markdown(report: BenchReport) -> str:
                     f"{row.counts.recast_duplicated} "
                     f"({_fmt(rates(row.counts)['recast_duplicated'])})"
                 ),
+            ]
+            for row in report.rows
+        ],
+    )
+    lines += [
+        "",
+        "## Pick",
+        "",
+        (
+            "Staged mentions a case gives candidates for. *Correct*: the pick links "
+            "the expected entity, or nothing when none fits. *Wrong links*: links to "
+            "another entity, over all links. *Rejected*: answers the model-free check "
+            "refused."
+        ),
+        "",
+    ]
+    lines += _table(
+        ["Model", "Mentions", "Offered", "Correct", "Wrong links", "Rejected"],
+        [
+            [
+                row.label,
+                str(row.counts.picks_expected),
+                str(row.counts.picks_offered),
+                (
+                    f"{row.counts.picks_correct} "
+                    f"({_fmt(rates(row.counts)['pick_accuracy'])})"
+                ),
+                (
+                    f"{row.counts.picks_wrong} "
+                    f"({_fmt(rates(row.counts)['pick_wrong_link'])})"
+                ),
+                str(row.counts.picks_rejected),
             ]
             for row in report.rows
         ],

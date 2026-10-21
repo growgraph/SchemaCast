@@ -59,7 +59,31 @@ def test_a_cast_returns_what_the_cli_writes(make_service):
     assert {g["kind"] for g in body["groundings"]} == {"vertex", "edge", "property"}
     assert [r["record"] for r in body["quarantine"]] == ["unmapped"]
     assert body["manifest"]["episodes"] == 2
+    assert body["manifest"]["output_format_version"] == 5
     assert len(endpoint.requests) == 2
+
+
+def test_cast_mentions_are_record_graphs_with_text_evidence(make_service):
+    service, _ = make_service({"m1": [ANN_REPLY], "m2": [NOTE_REPLY]})
+    body = service.post("/cast", json=_body(ANN, NOTE), headers=AUTH).json()
+
+    machine = body["mentions"][0]["records"][1]
+    assert (machine["type"], machine["may_create"]) == ("Machine", True)
+    assert set(machine["evidence"]) == {"quote", "span"}
+    assert machine["evidence"]["quote"] == "press S-7"
+    assert set(machine["evidence"]["span"]) == {"start", "end"}
+    assert machine["props"]["serial"]["evidence"]["quote"] == "S-7"
+    assert body["mentions"][0]["relations"][0]["evidence"]["quote"] == (
+        "operates press S-7"
+    )
+    assert "unmapped" not in body["mentions"][1]
+    (item,) = body["unmapped"]["m2"]
+    assert (item["quote"], item["note"]) == (
+        "Opened a work order",
+        "work orders not modelled here",
+    )
+    assert set(body["unmapped"]) == {"m2"}
+    assert body["staged"] == {"records": [], "relations": []}
 
 
 def test_a_wrong_or_missing_key_is_refused(make_service):

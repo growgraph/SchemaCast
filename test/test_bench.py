@@ -109,9 +109,14 @@ def test_the_oracle_scores_perfectly_on_the_whole_schema():
         assert counts.mention_agree == counts.entities_matched, case.name
         assert counts.edges_reversed == 0 and counts.nonconforming_first == 0, case.name
         assert counts.recast_added == 0 and counts.recast_duplicated == 0, case.name
+        assert counts.picks_correct == counts.picks_expected, case.name
+        assert counts.picks_offered == counts.picks_expected, case.name
+        assert counts.picks_wrong == 0 and counts.picks_rejected == 0, case.name
     recast = sum(case.counts.recast_vertices for case in row.cases)
     assert recast > 0
     assert row.counts.forbidden_expected > 0
+    assert row.counts.picks_expected == 4
+    assert row.counts.picks_linked == 2
 
 
 def test_the_oracle_row_reads_selection_under_the_case_budget():
@@ -311,3 +316,37 @@ def test_a_replay_miss_stops_the_run(tmp_path: Path, monkeypatch: pytest.MonkeyP
     )
     assert result.exit_code != 0
     assert "cache" in result.output.lower()
+
+
+def test_a_pick_is_scored_by_what_it_links():
+    from graflo.link.records import EntityCandidate
+
+    from schemacast.bench.score import score_picks
+    from schemacast.pick import Pick
+
+    spec = BY_NAME["mention/logistics"].picks["mention-logistics-1"]
+    kari = EntityCandidate(
+        vertex_type="Driver", key={"license": "L-5210"}, lane="relation"
+    )
+    ola = EntityCandidate(
+        vertex_type="Driver", key={"license": "L-4471"}, lane="metadata"
+    )
+
+    def _counts(outcome, candidate=None):
+        pick = Pick(
+            source_id="mention-logistics-1",
+            ref="v1",
+            type="Driver",
+            outcome=outcome,
+            candidate=candidate,
+        )
+        return score_picks([pick], {"v1": "d"}, spec)
+
+    right = _counts("picked", ola)
+    assert (right.picks_correct, right.picks_linked, right.picks_wrong) == (1, 1, 0)
+    wrong = _counts("picked", kari)
+    assert (wrong.picks_correct, wrong.picks_wrong) == (0, 1)
+    rejected = _counts("rejected")
+    assert (rejected.picks_correct, rejected.picks_rejected) == (0, 1)
+    missed = score_picks([], {}, spec)
+    assert (missed.picks_expected, missed.picks_offered) == (1, 0)

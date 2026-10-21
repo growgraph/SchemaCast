@@ -4,7 +4,7 @@
 
 Every mention, relation and property in a cast has a **grounding**: where in
 which text it was read. Groundings are written to `groundings.jsonl` beside the
-graph, not into it, and name the mention graph's refs; resolution says which
+graph, not into it, and name the record graph's refs; resolution says which
 entity a ref became.
 
 | Field | Holds |

@@ -1,7 +1,7 @@
 # How a cast works
 
 A **cast** turns episodes — short texts with their source metadata — into
-mention graphs: what each text names, what it states about it and the
+record graphs (graflo `RecordGraph`): what each text names, what it states about it and the
 relations between, with a grounding for every assertion. graflo then resolves
 the mentions to entities by their keys and writes what it identifies. Each
 episode goes through the same steps, and episodes run concurrently.
@@ -14,7 +14,7 @@ episode goes through the same steps, and episodes run concurrently.
 | **Validate** | Every item is checked against the slice and the text. Values are coerced to their field type, an edge given backwards is turned round, and quotes are matched ignoring case, accents and whitespace; each fix is recorded. What is still wrong is a finding. |
 | **Repair** | If there are findings, the model is shown them, grouped by kind, and asked for its whole reply again; at most twice. The attempt that keeps the most items wins. |
 | **Quarantine** | What still fails is left out, with the finding and the model's reply, and written to the quarantine sink. The rest of the reply stands. |
-| **Mention graph** | What remains becomes the episode's mention graph, each mention, relation and property with its grounding. |
+| **Record graph** | What remains becomes the episode's record graph: each mention, relation and property with its quote and span as `evidence`, and a grounding. `unmapped` stays outside it. |
 | **Resolve** | graflo identifies each mention by its keys, across the batch's texts and, with a database, in the graph; the rest is staged with the reason. See [Mentions and resolution](identities.md). |
 | **Write** | Optionally, what resolved is upserted into a database through graflo's writer. See [Writing to a database](../guides/database.md). |
 

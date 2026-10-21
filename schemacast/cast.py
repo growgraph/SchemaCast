@@ -1,8 +1,9 @@
 """Cast episodes into a governed schema: the whole pipeline.
 
 Per episode: select a slice → one extraction call → validate → at most two
-typed repairs → quarantine what still fails → a mention graph. The batch's
-mention graphs are then resolved by graflo, without a model and without a
+typed repairs → quarantine what still fails → a record graph (graflo
+``RecordGraph``, quotes and spans in ``evidence``). The batch's record graphs
+are then resolved by graflo, without a model and without a
 database: what their keys identify becomes ``output``, the rest is staged. A
 write resolves them again against the database (``schemacast.write``).
 No critic pass: a valid extraction is never judged a second time.
@@ -22,9 +23,9 @@ from collections.abc import Iterable
 from importlib.metadata import version
 from typing import Any, Literal
 
-from graflo.architecture.graph_types.mention import MentionGraph, Resolution
 from graflo.architecture.schema.document import Schema
 from graflo.architecture.schema.graflo_output import GraFloOutput
+from graflo.link.records import RecordGraph, Resolution
 from openai import APIError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -39,7 +40,7 @@ from schemacast.extract import (
     episode_shape,
     extract,
 )
-from schemacast.ground import Grounding, groundings
+from schemacast.ground import Grounding, UnmappedText, groundings
 from schemacast.llm.cache import LLMCache, cache_key_config
 from schemacast.llm.client import (
     LLMClient,
@@ -64,7 +65,7 @@ from schemacast.sink import MemoryQuarantineSink, QuarantineRecord, QuarantineSi
 from schemacast.validate import Finding, Fix, Validation, validate
 
 #: Version of the files a cast writes; bumped when a record's meaning changes.
-OUTPUT_FORMAT_VERSION = 4
+OUTPUT_FORMAT_VERSION = 5
 
 #: Repair requests after the first reply, at most.
 MAX_REPAIRS = 2
@@ -156,8 +157,8 @@ class CastResult(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    graphs: list[MentionGraph] = Field(
-        default_factory=list, description="One mention graph per episode cast."
+    graphs: list[RecordGraph] = Field(
+        default_factory=list, description="One record graph per episode cast."
     )
     resolution: Resolution = Field(
         description="The graphs resolved by their keys, without a database."
@@ -166,6 +167,10 @@ class CastResult(BaseModel):
         description="The full schema and what the resolution identified."
     )
     groundings: list[Grounding] = Field(default_factory=list)
+    unmapped: dict[str, list[UnmappedText]] = Field(
+        default_factory=dict,
+        description="By episode source id: what the text states that no type covers.",
+    )
     episodes: list[EpisodeResult] = Field(default_factory=list)
     manifest: RunManifest
 
@@ -185,7 +190,7 @@ class EpisodeOutcome(BaseModel):
     validation: Validation | None = Field(
         default=None, description="The attempt kept, after repairs."
     )
-    graph: MentionGraph | None = None
+    graph: RecordGraph | None = None
     groundings: list[Grounding] = Field(default_factory=list)
     quarantine: list[QuarantineRecord] = Field(
         default_factory=list, description="What the episode left out."
@@ -380,7 +385,7 @@ class SchemaCaster:
                 source_id=episode.source_id,
                 status=status,
                 failure="nothing_valid" if status == "failed" else None,
-                mentions=len(graph.mentions),
+                mentions=len(graph.records),
                 relations=len(graph.relations),
                 quarantined=len(removed),
                 unmapped=len(best.unmapped),
@@ -460,10 +465,10 @@ class SchemaCaster:
     def _assemble(
         self, outcomes: list[EpisodeOutcome], usage: UsageTracker
     ) -> CastResult:
-        from graflo.hq.mention_resolve import promote, resolve_mentions
+        from graflo.link.resolve import promote, resolve_records
 
         graphs = [o.graph for o in outcomes if o.graph is not None]
-        resolution = resolve_mentions(self.schema, graphs, owned=self.owned)
+        resolution = resolve_records(self.schema, graphs, owned=self.owned)
         container = promote(self.schema, resolution)
         results = [o.result for o in outcomes]
         status = {name: 0 for name in ("ok", "partial", "failed")}
@@ -488,7 +493,7 @@ class SchemaCaster:
             relations=sum(r.relations for r in results),
             vertices=sum(len(docs) for docs in container.vertices.values()),
             edges=sum(len(triples) for triples in container.edges.values()),
-            staged=len(resolution.staged.mentions),
+            staged=len(resolution.staged.records),
             quarantined=sum(r.quarantined for r in results),
             unmapped=sum(r.unmapped for r in results),
             usage=usage,
@@ -500,6 +505,11 @@ class SchemaCaster:
                 {"schema": self.schema, "data": container}
             ),
             groundings=[g for o in outcomes for g in o.groundings],
+            unmapped={
+                o.result.source_id: o.validation.unmapped
+                for o in outcomes
+                if o.validation is not None and o.validation.unmapped
+            },
             episodes=results,
             manifest=manifest,
         )
