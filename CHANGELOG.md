@@ -13,8 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`gather_candidates`) and to the entities its metadata names, in one call: per mention, a
   candidate id from an enum or `none`, checked without a model. `schemacast pick`, `POST /pick`,
   `Picker`, `apply_picks` (a pick links, never writes); cached and replayable like the cast.
+- **Known entities**: `Episode.known` (`KnownEntity`: `vertex_type`, `key`, `role`, `label`) names
+  records the text belongs to. Their types are pinned into the slice, they are shown in a `# KNOWN`
+  block as refs `k1`…, and an edge may end at one; restating one is a `known_ref` finding. A used
+  one is a record (`Validation.known`) stating its key from the source, with no grounding.
+- Bench corpus 1.3.0: the `known` family; edges in `expected.yaml` may end at `k1`….
 - Bench corpus 1.2.0: `pick.yaml` in the `mention` family, scored as *Pick* (correct, wrong links,
   rejected).
+- `schemacast-bench --corpus DIR` runs a corpus of your own (never publishable);
+  `schemacast-bench score CASTS…` scores saved `POST /cast` bodies with no model. Reports list
+  every unmatched expected and produced item per episode; `expected.yaml` takes `allowed` items.
 - **`cast` exit status by cause:** 0 when every failure is about the episode itself, 75 when some
   episodes failed at the provider (a rerun retries them), 1 when the run stopped or every episode
   failed. The summary names failures by kind.
@@ -34,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `unresolved.jsonl`; groundings name mention refs (`ref`, `source_ref`, `target_ref`) instead of
   identities; `POST /cast` returns `mentions` and `staged`; `write_cast` returns the database's
   resolution with the report.
+- Output format version 6: a record of a known entity has `evidence` `{"known", "label"}` and no
+  quote or span; `EpisodeResult.known` counts them. A new extraction rule keeps an entity the text
+  names without its key, so replies cached before it are not reused.
 - Output format version 5, on graflo's record API (`graflo.link`): `mentions` (file and `POST /cast`)
   are graflo `RecordGraph`s with each quote and span in `evidence`; `staged` holds `StagedRecord`s
   and `/pick` takes `StagedCandidates` with `record`; `unmapped` is SchemaCast's, per episode.

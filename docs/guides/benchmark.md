@@ -9,6 +9,8 @@ schemacast-bench --model gpt-5.6-luna         # plus a model row (SCHEMACAST_LLM
 schemacast-bench --split test --model a --model b
 schemacast-bench --model a --replay           # from the cache; makes no request
 schemacast-bench compare a.json b.json        # read run b against run a
+schemacast-bench --corpus my-corpus/          # a corpus of your own
+schemacast-bench score --corpus my-corpus/ casts/*.json   # saved casts; no model
 ```
 
 Each run writes `<stamp>.json` (counts per episode, rates per case and row) and `<stamp>.md`
@@ -20,8 +22,8 @@ no prices ship with the package.
 
 `schemacast/bench/cases/<family>/<instance>/` holds `case.yaml` (description, schema, and optionally `recast: true`
 or pinned `settings`), `episodes.jsonl` and `expected.yaml`. Schemas live in `schemacast/bench/schemas/`; a case
-naming several merges their vertices and edges. Each family isolates one failure mode in four
-domains:
+naming several merges their vertices and edges. Each family isolates one failure mode, in four
+domains (`known` in two):
 
 | Family | What it isolates |
 |---|---|
@@ -34,20 +36,44 @@ domains:
 | `distractors` | a wide schema sliced under a tight budget, with types the text names but says nothing about |
 | `selection` | a wide schema sliced under a budget, its types named in inflected forms (`parcels`, `shipped`) and related to each other |
 | `context` | a key stated only in an earlier text of the thread (`Episode.context`); everything else in the text itself |
+| `known` | a text about a record it never names (`Episode.known`): edges to its ref `k1`…, a restated record that must not be written, entities that cannot be shown; one instance in each half |
 
-`expected.yaml` maps each episode to `vertices` (keyed by a handle), `edges` between handles, and
-`forbidden` items a cast must not write. An optional `pick.yaml` gives, for an episode's staged
+`expected.yaml` maps each episode to `vertices` (keyed by a handle), `edges` between handles,
+`forbidden` items a cast must not write, and `allowed` items a cast may write without being
+required to (an entity the text implies): a produced item matching an `allowed` one counts
+neither as matched nor as produced. `forbidden` and `allowed` edges may use the expected
+handles; `allowed` handles must differ from them. An edge may end at a known entity by its ref
+(`k1`…), which matches by ref and counts as no entity. An optional `pick.yaml` gives, for an episode's staged
 mentions (by handle), the candidates a resolver would gather, the entities the record names, and
 the expected `pick` (a key, or null when none fits). Every quote occurs in the text (a property may instead
 name the `context` item its quote is in, for an identity value only) and every value is what
 its field makes of it; a test checks both, and that the oracle scores perfectly on the whole
 schema.
 
-`SPLITS.yaml` puts two instances of each family in `dev` and two in `test`. Tune against `dev`;
+`SPLITS.yaml` puts two instances of each family in `dev` and two in `test` (`known`: one in each). Tune against `dev`;
 only `--split test` on an unmodified corpus is publishable, and a report says when it is not.
 `CORPUS_VERSION` identifies the corpus and `CORPUS_DIGEST` pins it: change a case, a schema or the
 split and bump the version, or the test suite fails. Results from different versions are not
 comparable.
+
+## A corpus of your own
+
+`--corpus DIR` runs the bench on `DIR/cases/` (with its `SPLITS.yaml`) and `DIR/schemas/`, laid
+out like the bundled corpus. A report on such a corpus is never publishable, whatever its digest.
+
+## Scoring saved casts
+
+`schemacast-bench score [--corpus DIR] [--split …] [--row LABEL] CASTS…` scores cast output
+already on disk, with no model. Each file holds a `POST /cast` response body, or
+`{"episodes": [...], "cast": <body>}`. Episodes pair with the corpus on `source_id`: a corpus
+episode no file holds counts as failed and fully missed; a saved episode the corpus does not
+hold is listed and ignored. The row is labelled with the casts' model, or `--row`.
+
+A saved cast has no first reply, slice, token counts, re-cast or pick, so conformance,
+hallucination, selection, re-cast, pick and token figures read `n/m` (not measured).
+
+Every report ends with *Misses*: per episode, each expected entity and edge nothing matched and
+each produced one that matched nothing expected or allowed, by quote.
 
 ## Rows
 

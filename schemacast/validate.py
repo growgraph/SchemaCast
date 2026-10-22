@@ -20,6 +20,12 @@ the reply left out; the mention is kept either way, and resolution decides.
 Kept mentions and relations are graflo records (``PartialRecord``,
 ``RecordRelation``); each one's quote and span, and each property's, are its
 ``evidence`` (:func:`schemacast.ground.evidence`).
+
+An episode's known entities are refs ``k1``… (:func:`schemacast.prompt.known_refs`)
+an edge may end at. A vertex the reply gives such a ref is a ``known_ref``
+finding. Each known entity a kept relation uses becomes a record in
+:attr:`Validation.known`, stating its key from the source: its ``evidence`` is
+``{"known": role, "label": label}``, with no quote or span.
 """
 
 from __future__ import annotations
@@ -43,12 +49,14 @@ from graflo.link.records import (
 )
 from pydantic import BaseModel, Field
 
-from schemacast.episode import ContextItem
+from schemacast.episode import ContextItem, KnownEntity
 from schemacast.extract import WireExtraction, WireProp
 from schemacast.fidelity import value_mismatch
 from schemacast.ground import Span, UnmappedText, evidence, locate
+from schemacast.prompt import known_refs
 
 FindingKind = Literal[
+    "known_ref",
     "duplicate_ref",
     "unknown_type",
     "undeclared_property",
@@ -64,6 +72,7 @@ FindingKind = Literal[
 #: Order findings are listed in, in reports and repair prompts.
 FINDING_ORDER: tuple[FindingKind, ...] = (
     "unknown_type",
+    "known_ref",
     "duplicate_ref",
     "identity_insufficient",
     "undeclared_edge",
@@ -123,6 +132,11 @@ class Validation(BaseModel):
 
     mentions: list[PartialRecord] = Field(default_factory=list)
     relations: list[RecordRelation] = Field(default_factory=list)
+    known: list[PartialRecord] = Field(
+        default_factory=list,
+        description="Known entities a kept relation uses (refs ``k1``…): their "
+        "key from the source, never created, never grounded.",
+    )
     unmapped: list[UnmappedText] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
     fixes: list[Fix] = Field(default_factory=list)
@@ -155,7 +169,7 @@ class Validation(BaseModel):
             source_id=source_id,
             schema_ref=schema_ref,
             reference_time=reference_time,
-            records=self.mentions,
+            records=[*self.mentions, *self.known],
             relations=self.relations,
         )
 
@@ -170,10 +184,12 @@ class _Checker:
         slice_: Schema,
         text: str,
         context: Sequence[ContextItem] = (),
+        known: Sequence[KnownEntity] = (),
     ) -> None:
         self.slice = slice_
         self.text = text
         self.context = {item.source_id: item.text for item in context}
+        self.known = known_refs(known, slice_)
         self.result = Validation()
 
     def source(self, span: Span) -> str:
@@ -293,7 +309,7 @@ class _Checker:
         """Check vertices; returns every ref the reply declared, mapped to its type."""
         vertex_config = self.slice.core_schema.vertex_config
         declared = {v.name: v for v in vertex_config.vertices}
-        refs: dict[str, str] = {}
+        refs = {ref: entity.vertex_type for ref, entity in self.known.items()}
         for i, wv in enumerate(wire.vertices):
             path = f"vertices[{i}]"
             common = {
@@ -302,6 +318,13 @@ class _Checker:
                 "ref": wv.ref,
                 "fragment": _dump(wv),
             }
+            if wv.ref in self.known:
+                self.find(
+                    kind="known_ref",
+                    message=f"{wv.ref!r} is a KNOWN entity, already in the graph.",
+                    **common,
+                )
+                continue
             if wv.ref in refs:
                 self.find(
                     kind="duplicate_ref",
@@ -359,7 +382,7 @@ class _Checker:
         return edge if edge is not None and edge.edge_id == edge_id else None
 
     def edges(self, wire: WireExtraction, refs: dict[str, str]) -> None:
-        valid_refs = {m.ref for m in self.result.mentions}
+        valid_refs = {m.ref for m in self.result.mentions} | set(self.known)
         for k, we in enumerate(wire.edges):
             path = f"edges[{k}]"
             common = {"scope": "edge", "path": path, "fragment": _dump(we)}
@@ -426,6 +449,25 @@ class _Checker:
                 )
             )
 
+    def known_records(self) -> None:
+        used = {r for rel in self.result.relations for r in (rel.source, rel.target)}
+        for ref, entity in self.known.items():
+            if ref not in used:
+                continue
+            mark = {"known": entity.role}
+            self.result.known.append(
+                PartialRecord(
+                    ref=ref,
+                    type=entity.vertex_type,
+                    may_create=False,
+                    props={
+                        name: StatedProp(value=value, evidence=mark)
+                        for name, value in entity.key.items()
+                    },
+                    evidence={**mark, "label": entity.label},
+                )
+            )
+
     def unmapped(self, wire: WireExtraction) -> None:
         for item in wire.unmapped:
             # A quote not found in the text is about the prompt around it.
@@ -441,11 +483,14 @@ def validate(
     slice_: Schema,
     text: str,
     context: Sequence[ContextItem] = (),
+    known: Sequence[KnownEntity] = (),
 ) -> Validation:
-    """Check *wire* against *slice_*, the episode *text* and its *context*."""
-    checker = _Checker(slice_, text, context)
+    """Check *wire* against *slice_*, the episode *text*, its *context* and its
+    *known* entities."""
+    checker = _Checker(slice_, text, context, known)
     refs = checker.vertices(wire)
     checker.edges(wire, refs)
+    checker.known_records()
     checker.unmapped(wire)
     order = {kind: i for i, kind in enumerate(FINDING_ORDER)}
     checker.result.findings.sort(key=lambda f: order[f.kind])

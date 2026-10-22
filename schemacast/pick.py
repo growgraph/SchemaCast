@@ -197,19 +197,45 @@ def _frozen(key: dict[str, Any]) -> tuple[tuple[str, str], ...]:
     return tuple(sorted((k, str(v)) for k, v in key.items()))
 
 
+def _related(
+    graph: RecordGraph | None, ref: str
+) -> set[tuple[str, tuple[tuple[str, str], ...]]]:
+    """Type and stated key of every record *graph* relates to record *ref*."""
+    if graph is None:
+        return set()
+    others = {
+        rel.target if rel.source == ref else rel.source
+        for rel in graph.relations
+        if ref in (rel.source, rel.target)
+    }
+    return {
+        (record.type, _frozen(record.values()))
+        for record in graph.records
+        if record.ref in others and record.ref != ref
+    }
+
+
 def offers(item: PickItem) -> list[_Offer]:
     """The staged mentions of *item*, each with its candidates and the type-
-    compatible metadata entities, under ids ``m1``… and ``c1``…."""
+    compatible metadata entities, under ids ``m1``… and ``c1``….
+
+    A metadata entity is not offered to a mention the record graph relates to a
+    record stating that entity's key: two related records are two entities.
+    """
     out: list[_Offer] = []
     number = 0
     for index, entry in enumerate(item.staged, start=1):
         seen: set[tuple[str, tuple[tuple[str, str], ...]]] = set()
         chosen: dict[str, EntityCandidate] = {}
-        for candidate in [*entry.candidates, *item.entities]:
+        related = _related(item.graph, entry.record.ref)
+        tagged = [(c, False) for c in entry.candidates] + [
+            (c, True) for c in item.entities
+        ]
+        for candidate, from_metadata in tagged:
             if candidate.vertex_type != entry.record.type:
                 continue
             identity = (candidate.vertex_type, _frozen(candidate.key))
-            if identity in seen:
+            if identity in seen or (from_metadata and identity in related):
                 continue
             seen.add(identity)
             number += 1
@@ -264,9 +290,10 @@ def _describe(candidate: EntityCandidate, graph: RecordGraph | None) -> tuple[st
     if candidate.lane == "relation":
         anchor = candidate.anchor or "?"
         if graph is not None:
-            quote = next(
-                (quote_of(r.evidence) for r in graph.records if r.ref == anchor), None
-            )
+            record = next((r for r in graph.records if r.ref == anchor), None)
+            evidence = (record.evidence or {}) if record is not None else {}
+            label = evidence.get("label")
+            quote = quote_of(evidence) or (label if isinstance(label, str) else None)
             if quote:
                 anchor = _scalar(quote)
         found = f"relation: linked by {candidate.relation or '?'} to {anchor}"

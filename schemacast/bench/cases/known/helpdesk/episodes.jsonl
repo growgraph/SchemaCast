@@ -1,0 +1,2 @@
+{"source_id": "known-helpdesk-1", "text": "Reproduced with the AX-200 controller; same fault as HD-7302.", "known": [{"vertex_type": "Ticket", "key": {"number": "HD-7311"}, "role": "subject", "label": "Controller reboots after update"}]}
+{"source_id": "known-helpdesk-2", "text": "Agent sam took this ticket over this morning.", "known": [{"vertex_type": "Channel", "key": {"name": "support"}, "role": "channel"}, {"vertex_type": "Agent", "key": {"name": "Sam"}, "role": "speaker"}, {"vertex_type": "Ticket", "key": {"number": "HD-7311"}, "role": "subject"}]}

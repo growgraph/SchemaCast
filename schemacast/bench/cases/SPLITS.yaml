@@ -1,4 +1,5 @@
-# Dev / test assignment: two instances of every family in each half.
+# Dev / test assignment: two instances of every family in each half; `known`
+# has one in each.
 #
 # Tuning prompts, rules or selection against a case makes it part of what the
 # system was fitted to, so tuning happens on `dev` and a published figure comes
@@ -25,6 +26,7 @@ dev:
 -   context/logistics
 -   selection/logistics
 -   selection/plant
+-   known/helpdesk
 test:
 -   distractors/logistics
 -   distractors/lab
@@ -44,3 +46,4 @@ test:
 -   context/lab
 -   selection/helpdesk
 -   selection/lab
+-   known/lab

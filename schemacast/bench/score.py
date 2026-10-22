@@ -6,7 +6,9 @@ identity of its own (assigned, blank) matches by equal property values or by a
 quote overlapping the expected one. Edges match by relation and matched
 endpoints; an edge between the right endpoints the wrong way round counts as
 reversed. Property values compare after coercion by their field, strings
-ignoring case and runs of whitespace.
+ignoring case and runs of whitespace. An expected edge may end at a known
+entity by its ref (``k1``…); it matches by ref, and known entities are not
+counted as entities.
 
 Every figure is a pair of integer counts, so cases pool by summing and a rate
 is read off the pooled counts.
@@ -15,6 +17,7 @@ is read off the pooled counts.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from typing import Any
 
 from graflo.architecture.schema.coerce import coerce_value
@@ -35,9 +38,11 @@ from schemacast.bench.corpus import (
     ExpectedProp,
 )
 from schemacast.cast import EpisodeOutcome
-from schemacast.ground import Span, locate, span_of
+from schemacast.episode import KnownEntity
+from schemacast.ground import Span, locate, quote_of, span_of
 from schemacast.llm.usage import UsageTracker
 from schemacast.pick import Pick
+from schemacast.prompt import known_refs
 from schemacast.validate import CONSEQUENTIAL, Validation
 
 #: Findings that are about grounding or follow from another, not about the schema.
@@ -180,7 +185,38 @@ class _Entity(BaseModel):
     mention: bool = True
     props: dict[str, Any] = {}
     spans: list[Span] = []
+    quotes: list[str] = []
     prop_spans: dict[str, list[Span]] = {}
+
+
+class Misses(BaseModel):
+    """What one episode's cast and its expected graph do not share, by quote.
+
+    Expected items no produced item matched, and produced items that matched
+    no expected or allowed item (a forbidden match is listed and marked).
+    """
+
+    expected_entities: list[str] = []
+    expected_edges: list[str] = []
+    produced_entities: list[str] = []
+    produced_edges: list[str] = []
+
+    @property
+    def empty(self) -> bool:
+        return not (
+            self.expected_entities
+            or self.expected_edges
+            or self.produced_entities
+            or self.produced_edges
+        )
+
+
+def _named(kind: str | None, quote: str | None) -> str:
+    return f"{kind or '?'} {_quoted(quote)}"
+
+
+def _quoted(quote: str | None) -> str:
+    return "(no quote)" if quote is None else '"' + " ".join(quote.split()) + '"'
 
 
 def _coerce_props(
@@ -269,6 +305,9 @@ def _entities(
         entity.mention = entity.mention and not valid.may_create
         entity.props = {**values, **entity.props}
         entity.spans.extend(_spans(valid.evidence))
+        quote = quote_of(valid.evidence)
+        if quote is not None:
+            entity.quotes.append(quote)
         for name, prop in valid.props.items():
             entity.prop_spans.setdefault(name, []).extend(_spans(prop.evidence))
         ref_index[valid.ref] = index
@@ -378,11 +417,10 @@ def _selection(
     outcome: EpisodeOutcome,
     gold: dict[str, _Gold],
     expected: ExpectedEpisode,
+    kinds: dict[str, str],
 ) -> None:
     types = {item.type for item in gold.values()}
-    edge_ids = {
-        (gold[e.from_].type, gold[e.to].type, e.relation) for e in expected.edges
-    }
+    edge_ids = {(kinds[e.from_], kinds[e.to], e.relation) for e in expected.edges}
     selection = outcome.selection
     failed = (outcome.result.failure or "").startswith("selection_")
     # A schema under budget passes whole; there is nothing to recall.
@@ -395,7 +433,7 @@ def _selection(
     counts.gold_edges += len(edge_ids)
     if selection is None:
         return
-    seeded: set[str] = set()
+    seeded: set[str] = set(selection.pinned)
     for hit in selection.seeds:
         if hit.vertex is not None:
             seeded.add(hit.vertex)
@@ -415,8 +453,16 @@ def score_episode(
     text: str,
     usage: UsageTracker | None = None,
     context: dict[str, str] | None = None,
+    misses: Misses | None = None,
+    known: Sequence[KnownEntity] = (),
 ) -> Counts:
-    """Counts for one cast episode; *context* maps context source ids to text."""
+    """Counts for one cast episode; *context* maps context source ids to text.
+
+    *misses*, when given, is filled with what the cast and the expected graph
+    do not share. *known* are the episode's known entities, whose refs expected
+    edges may name.
+    """
+    misses = misses if misses is not None else Misses()
     counts = Counts(episodes=1)
     result = outcome.result
     counts.failed += result.status == "failed"
@@ -434,16 +480,35 @@ def score_episode(
 
     gold = gold_vertices(expected, schema, text, context)
     banned = gold_vertices(expected.forbidden, schema, text, context)
+    allowed = gold_vertices(expected.allowed, schema, text, context)
     counts.entities_expected = len(gold)
     counts.edges_expected = len(expected.edges)
     counts.forbidden_expected = len(banned) + len(expected.forbidden.edges)
-    _selection(counts, outcome, gold, expected)
+    kinds = {
+        ref: entity.vertex_type for ref, entity in known_refs(known, schema).items()
+    }
+    kinds.update({handle: item.type for handle, item in gold.items()})
+    _selection(counts, outcome, gold, expected, kinds)
     edge_props = []
     for edge in expected.edges:
-        if edge.from_ not in gold or edge.to not in gold:
+        if edge.from_ not in kinds or edge.to not in kinds:
             raise ValueError(f"edge {edge.relation}: unknown handle")
-        edge_id = (gold[edge.from_].type, gold[edge.to].type, edge.relation)
+        edge_id = (kinds[edge.from_], kinds[edge.to], edge.relation)
         edge_props.append(_edge_props(schema, edge_id, edge.props))
+
+    def gold_quote(handle: str) -> str:
+        item = expected.vertices[handle]
+        return _named(item.type, item.quote)
+
+    def missed(pairs_: dict[int, str], matched_edges: set[int]) -> None:
+        misses.expected_entities += [
+            gold_quote(h) for h in expected.vertices if h not in pairs_.values()
+        ]
+        misses.expected_edges += [
+            f"{_named(edge.relation, edge.quote)} ({edge.from_} -> {edge.to})"
+            for i, edge in enumerate(expected.edges)
+            if i not in matched_edges
+        ]
 
     validation = outcome.validation
     if outcome.first is not None:
@@ -451,6 +516,7 @@ def score_episode(
     if validation is None:
         counts.props_expected += sum(len(g.props) for g in gold.values())
         counts.props_expected += sum(len(p) for p in edge_props)
+        missed({}, set())
         return counts
     _reply(counts, validation, first=False)
     counts.direction_fixed = sum(f.kind == "edge_reversed" for f in validation.fixes)
@@ -458,8 +524,16 @@ def score_episode(
     entities, ref_index = _entities(validation, schema)
     pairs = _match(entities, gold, set())
     banned_pairs = _match(entities, banned, set(pairs))
-    counts.entities_produced = len(entities)
+    allowed_pairs = _match(entities, allowed, set(pairs) | set(banned_pairs))
+    counts.entities_produced = len(entities) - len(allowed_pairs)
     counts.entities_matched = len(pairs)
+    for index, entity in enumerate(entities):
+        if index in pairs or index in allowed_pairs:
+            continue
+        line = _named(entity.type, entity.quotes[0] if entity.quotes else None)
+        misses.produced_entities.append(
+            line + (" (forbidden)" if index in banned_pairs else "")
+        )
     for index, handle in pairs.items():
         entity, item = entities[index], gold[handle]
         counts.mention_agree += entity.mention == item.mention
@@ -478,32 +552,56 @@ def score_episode(
     written = {ref_index[ref] for ref in resolved if ref in ref_index}
     counts.forbidden_written += sum(index in written for index in banned_pairs)
 
-    handles = {**pairs, **banned_pairs}
+    handles: dict[int, str] = {**pairs, **banned_pairs, **allowed_pairs}
+    known_used = {record.ref for record in validation.known}
+
+    def node(ref: str) -> int | str:
+        # A known entity is its own handle.
+        return ref if ref in known_used else ref_index[ref]
+
+    def handle(item: int | str) -> str | None:
+        return item if isinstance(item, str) else handles.get(item)
+
     produced: dict[
         tuple[Any, ...], tuple[dict[str, Any], list[Span], dict[str, list[Span]]]
     ] = {}
+    edge_quotes: dict[tuple[Any, ...], str | None] = {}
     for valid in validation.relations:
-        key = (
-            valid.edge_id[2],
-            ref_index[valid.source],
-            ref_index[valid.target],
-        )
+        key = (valid.edge_id[2], node(valid.source), node(valid.target))
         props, spans, prop_spans = produced.setdefault(key, ({}, [], {}))
+        edge_quotes.setdefault(key, quote_of(valid.evidence))
         props.update({k: v for k, v in valid.values().items() if k not in props})
         spans.extend(_spans(valid.evidence))
         for name, prop in valid.props.items():
             prop_spans.setdefault(name, []).extend(_spans(prop.evidence))
-    counts.edges_produced = len(produced)
     by_handles = {
-        (relation, handles.get(src), handles.get(tgt)): value
+        (relation, handle(src), handle(tgt)): value
         for (relation, src, tgt), value in produced.items()
     }
-    for edge, gold_props in zip(expected.edges, edge_props, strict=True):
+    allowed_edges = {
+        (edge.relation, edge.from_, edge.to) for edge in expected.allowed.edges
+    }
+    taken = {
+        (edge.relation, edge.from_, edge.to) for edge in expected.edges
+    } | allowed_edges
+    counts.edges_produced = len(produced) - sum(
+        (relation, handle(src), handle(tgt)) in allowed_edges
+        for relation, src, tgt in produced
+    )
+    for key in produced:
+        relation, src, tgt = key
+        if (relation, handle(src), handle(tgt)) not in taken:
+            misses.produced_edges.append(_named(relation, edge_quotes[key]))
+    matched_edges: set[int] = set()
+    for number, (edge, gold_props) in enumerate(
+        zip(expected.edges, edge_props, strict=True)
+    ):
         forward = by_handles.get((edge.relation, edge.from_, edge.to))
         if forward is None:
             counts.props_expected += len(gold_props)
             counts.edges_reversed += (edge.relation, edge.to, edge.from_) in by_handles
             continue
+        matched_edges.add(number)
         props, spans, prop_spans = forward
         counts.edges_matched += 1
         span = locate(edge.quote, text)
@@ -521,6 +619,7 @@ def score_episode(
         (edge.relation, edge.from_, edge.to) in by_handles
         for edge in expected.forbidden.edges
     )
+    missed(pairs, matched_edges)
     return counts
 
 

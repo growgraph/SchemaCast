@@ -59,7 +59,7 @@ def test_a_cast_returns_what_the_cli_writes(make_service):
     assert {g["kind"] for g in body["groundings"]} == {"vertex", "edge", "property"}
     assert [r["record"] for r in body["quarantine"]] == ["unmapped"]
     assert body["manifest"]["episodes"] == 2
-    assert body["manifest"]["output_format_version"] == 5
+    assert body["manifest"]["output_format_version"] == 6
     assert len(endpoint.requests) == 2
 
 

@@ -15,6 +15,10 @@ from schemacast.validate import FINDING_ORDER, Finding, FindingKind
 
 GUIDANCE: dict[FindingKind, str] = {
     "unknown_type": "Use only types listed under TYPES. If no type fits, move the item to `unmapped`.",
+    "known_ref": (
+        "Refs listed under KNOWN name entities already in the graph: add no vertex "
+        "with such a ref, and use the ref only as an edge's `from` or `to`."
+    ),
     "duplicate_ref": "Give every vertex its own ref.",
     "identity_insufficient": (
         "Give every key property (`id:`), or every property of an `alt id:`, that the "

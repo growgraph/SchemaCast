@@ -26,6 +26,7 @@ from schemacast.bench.score import gold_vertices, score_episode, score_recast
 from schemacast.cast import SchemaCaster
 from schemacast.config import CacheSettings, SchemaCastSettings
 from schemacast.ground import locate
+from schemacast.prompt import known_refs
 
 CORPUS = load_corpus()
 BY_NAME = {case.name: case for case in CORPUS}
@@ -41,10 +42,11 @@ def test_the_corpus_digest_is_pinned_to_its_version():
 def test_every_family_has_two_dev_and_two_test_instances():
     families = Counter((case.family, case.split) for case in CORPUS)
     names = {case.family for case in CORPUS}
-    assert len(names) == 9
+    assert len(names) == 10
     for family in names:
-        assert families[(family, "dev")] == 2
-        assert families[(family, "test")] == 2
+        per_half = 1 if family == "known" else 2
+        assert families[(family, "dev")] == per_half
+        assert families[(family, "test")] == per_half
 
 
 @pytest.mark.parametrize("case", CORPUS, ids=lambda case: case.name)
@@ -55,7 +57,7 @@ def test_the_expected_graph_is_in_the_text(case: BenchCase):
         expected = case.expected[episode.source_id]
         text = episode.text
         context = {item.source_id: item.text for item in episode.context}
-        for graph in (expected, expected.forbidden):
+        for graph in (expected, expected.forbidden, expected.allowed):
             gold_vertices(graph, case.schema_, text, context)  # values
             for handle, vertex in graph.vertices.items():
                 assert locate(vertex.quote, text), (episode.source_id, handle)
@@ -70,14 +72,16 @@ def test_the_expected_graph_is_in_the_text(case: BenchCase):
                         handle,
                         name,
                     )
-            handles = {**expected.vertices, **graph.vertices}
+            kinds = {
+                ref: entity.vertex_type
+                for ref, entity in known_refs(episode.known, case.schema_).items()
+            }
+            kinds.update(
+                {h: v.type for h, v in {**expected.vertices, **graph.vertices}.items()}
+            )
             for edge in graph.edges:
                 assert locate(edge.quote, text), (episode.source_id, edge.relation)
-                edge_id = (
-                    handles[edge.from_].type,
-                    handles[edge.to].type,
-                    edge.relation,
-                )
+                edge_id = (kinds[edge.from_], kinds[edge.to], edge.relation)
                 assert edge_id in edge_ids, (episode.source_id, edge_id)
                 for name, prop in edge.props.items():
                     assert locate(prop.evidence, text), (episode.source_id, name)

@@ -1,0 +1,4 @@
+description: Notes on a sample they never name; the sample is a known entity, kept in a slice that retrieval alone would not give it.
+schema: lab
+settings:
+    slice_max_elements: 3

@@ -25,7 +25,8 @@ JSON is written with sorted keys, so two casts compare with `diff`.
 | `selection` | `whole` or `slice` |
 | `retrieval` | how selection went: hits per lane, seeds fused, gated out, capped and kept, and the schema's size |
 | `requests`, `repairs` | model requests, re-asks and repairs included; typed repair rounds |
-| `mentions`, `relations`, `quarantined`, `unmapped` | counts |
+| `mentions`, `relations`, `quarantined`, `unmapped` | counts; `mentions` are records read from the text |
+| `known` | known entities a relation uses |
 | `repair_failure` | why a repair request failed, when one did; the best earlier reply was kept |
 | `fixes` | deterministic corrections applied without asking the model: `coerced`, `edge_reversed`, `quote_normalized`, `grounded_in_context` |
 
@@ -37,7 +38,10 @@ and the stated `props` (each a `value`); its `relations`, each an `edge_id`
 between a `source` and a `target` ref, with props. Every record, relation and
 property carries `evidence`: `{"quote": str, "span": {"start": int, "end":
 int}}`, with `span.context` the context item's `source_id` when it was read
-there. `unmapped` entries are in `quarantine.jsonl`.
+there. A known entity a relation uses is a record with ref `k1`… and
+`may_create: false`, its key as props, and `evidence` `{"known": role, "label":
+label}` instead of a quote and span (see [Known entities](../concepts/context.md#known-entities)).
+`unmapped` entries are in `quarantine.jsonl`.
 
 ## `staged.jsonl`
 
@@ -59,7 +63,7 @@ outcome, usage).
 
 ## `manifest.json`
 
-The output format version (5: mentions are graflo record graphs, quotes and spans in `evidence`, `unmapped` outside them, `staged.jsonl` lines without a `record` tag; 4: a cast is mention graphs resolved by keys, and groundings name mention refs; 3: vertex groundings named `resolved_by`; 2: groundings may point into context), the SchemaCast
+The output format version (6: a record may be a known entity, with no quote or span; 5: mentions are graflo record graphs, quotes and spans in `evidence`, `unmapped` outside them, `staged.jsonl` lines without a `record` tag; 4: a cast is mention graphs resolved by keys, and groundings name mention refs; 3: vertex groundings named `resolved_by`; 2: groundings may point into context), the SchemaCast
 and graflo versions, the schema as `name@version`, every model
 setting that reaches the provider, the token ceiling and slice budget, the
 counts by status, and `usage`: calls, cache hits, failures, re-asks, and

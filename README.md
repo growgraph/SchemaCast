@@ -74,7 +74,9 @@ cast twice changes nothing in a database that upserts.
 
 `schemacast-bench` casts a bundled corpus of texts whose graphs are known and scores the result
 exactly, with no model as judge: conformance, hallucination, precision and recall, direction,
-spans, mention versus mint, injection, selection and re-cast stability, with tokens and cost.
+spans, mention versus mint, injection, selection and re-cast stability, with tokens and cost. It
+runs a corpus of your own the same way (`--corpus DIR`), and scores saved casts with no model
+(`schemacast-bench score`).
 
 ## Not yet
 

@@ -1,4 +1,5 @@
-"""``schemacast-bench``: cast the corpus and score it, or compare two runs."""
+"""``schemacast-bench``: cast the corpus and score it, score saved casts, or
+compare two runs."""
 
 from __future__ import annotations
 
@@ -10,9 +11,15 @@ import click
 
 from schemacast.bench.compare import CompareError, compare, load_report
 from schemacast.bench.compare import to_markdown as compare_markdown
-from schemacast.bench.corpus import CORPUS_VERSION, BenchCase, load_corpus
+from schemacast.bench.corpus import (
+    CORPUS_VERSION,
+    BenchCase,
+    corpus_dirs,
+    load_corpus,
+)
 from schemacast.bench.report import to_markdown, write_report
-from schemacast.bench.run import Row, load_prices, new_report, run_row
+from schemacast.bench.run import BenchReport, Row, load_prices, new_report, run_row
+from schemacast.bench.saved import SavedCastError, SavedCasts, score_saved
 from schemacast.config import SchemaCastSettings
 from schemacast.llm.cache import CacheMissError
 from schemacast.llm.client import LLMConfigurationError
@@ -31,6 +38,54 @@ def select_cases(
     if cases:
         selected = [c for c in selected if c.name in cases]
     return selected
+
+
+def corpus_of(root: Path | None) -> list[BenchCase]:
+    """The bundled corpus, or the one under *root* (``cases/``, ``schemas/``)."""
+    if root is None:
+        return load_corpus()
+    try:
+        return load_corpus(*corpus_dirs(root))
+    except ValueError as error:
+        raise click.UsageError(str(error)) from error
+
+
+def _write(report: BenchReport, out_dir: Path, started: datetime) -> None:
+    click.echo(to_markdown(report))
+    json_path, md_path = write_report(
+        report, out_dir, started.strftime("%Y%m%dT%H%M%SZ")
+    )
+    click.echo(f"Wrote {json_path} and {md_path}", err=True)
+
+
+_CORPUS = click.option(
+    "--corpus",
+    "corpus_root",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="A corpus of your own: DIR/cases (with SPLITS.yaml) and DIR/schemas, laid "
+    "out like the bundled one. Never publishable.",
+)
+_SPLIT = click.option(
+    "--split",
+    type=click.Choice(["dev", "test", "all"]),
+    default="all",
+    show_default=True,
+    help="dev is tuned against; only test is publishable.",
+)
+_FAMILY = click.option(
+    "--family", "families", multiple=True, help="Only these families."
+)
+_CASE = click.option(
+    "--case", "cases", multiple=True, help="Only these cases, e.g. units/lab."
+)
+_OUT = click.option(
+    "--out",
+    "out_dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path("bench-results"),
+    show_default=True,
+    help="Where the JSON and Markdown reports go.",
+)
 
 
 class _RunByDefault(click.Group):
@@ -67,30 +122,16 @@ def main() -> None:
     show_default=True,
     help="Add the oracle row: the expected graph through the whole pipeline. Free.",
 )
-@click.option(
-    "--split",
-    type=click.Choice(["dev", "test", "all"]),
-    default="all",
-    show_default=True,
-    help="dev is tuned against; only test is publishable.",
-)
-@click.option("--family", "families", multiple=True, help="Only these families.")
-@click.option(
-    "--case", "cases", multiple=True, help="Only these cases, e.g. units/lab."
-)
+@_SPLIT
+@_FAMILY
+@_CASE
+@_CORPUS
 @click.option(
     "--replay",
     is_flag=True,
     help="Serve every reply from the cache; a miss stops the run.",
 )
-@click.option(
-    "--out",
-    "out_dir",
-    type=click.Path(file_okay=False, path_type=Path),
-    default=Path("bench-results"),
-    show_default=True,
-    help="Where the JSON and Markdown reports go.",
-)
+@_OUT
 @click.option("--concurrency", type=int, default=8, show_default=True)
 def run(
     models: tuple[str, ...],
@@ -98,6 +139,7 @@ def run(
     split: str,
     families: tuple[str, ...],
     cases: tuple[str, ...],
+    corpus_root: Path | None,
     replay: bool,
     out_dir: Path,
     concurrency: int,
@@ -109,12 +151,13 @@ def run(
     names = list(models)
     if not names and not oracle:
         raise click.UsageError("nothing to run: give --model or keep --oracle")
-    selected = select_cases(load_corpus(), split, families, cases)
+    selected = select_cases(corpus_of(corpus_root), split, families, cases)
     if not selected:
         raise click.UsageError("no case matches the filters")
     prices, prices_source = load_prices()
     click.echo(
-        f"Corpus {CORPUS_VERSION} [{split}]: {len(selected)} case(s); "
+        f"Corpus {CORPUS_VERSION if corpus_root is None else corpus_root} "
+        f"[{split}]: {len(selected)} case(s); "
         f"rows: {', '.join((['oracle'] if oracle else []) + names)}",
         err=True,
     )
@@ -141,13 +184,67 @@ def run(
     except (LLMConfigurationError, CacheMissError) as error:
         raise click.ClickException(str(error)) from error
     report = new_report(
-        split, started.isoformat(timespec="seconds"), rows, prices_source
+        split, started.isoformat(timespec="seconds"), rows, prices_source, corpus_root
     )
-    click.echo(to_markdown(report))
-    json_path, md_path = write_report(
-        report, out_dir, started.strftime("%Y%m%dT%H%M%SZ")
+    _write(report, out_dir, started)
+
+
+@main.command("score")
+@click.argument(
+    "casts",
+    nargs=-1,
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@_CORPUS
+@_SPLIT
+@_FAMILY
+@_CASE
+@click.option("--row", "row_label", help="Row label; default: the casts' model.")
+@_OUT
+def score_command(
+    casts: tuple[Path, ...],
+    corpus_root: Path | None,
+    split: str,
+    families: tuple[str, ...],
+    cases: tuple[str, ...],
+    row_label: str | None,
+    out_dir: Path,
+) -> None:
+    """Score saved casts against the corpus, with no model.
+
+    Each CASTS file is a `POST /cast` response body, or
+    `{"episodes": [...], "cast": <body>}`. A corpus episode no file holds counts
+    as missed.
+    """
+    corpus = corpus_of(corpus_root)
+    selected = select_cases(corpus, split, families, cases)
+    if not selected:
+        raise click.UsageError("no case matches the filters")
+    saved = SavedCasts()
+    paths = list(casts)
+    try:
+        for path in paths:
+            saved.add(path)
+    except SavedCastError as error:
+        raise click.ClickException(str(error)) from error
+    started = datetime.now(UTC)
+    row = score_saved(
+        selected,
+        saved,
+        row_label or saved.label(paths),
+        corpus_ids={e.source_id for case in corpus for e in case.episodes},
     )
-    click.echo(f"Wrote {json_path} and {md_path}", err=True)
+    if row.unmatched_casts:
+        click.echo(
+            f"{len(row.unmatched_casts)} saved episode(s) not in the corpus, ignored: "
+            + ", ".join(row.unmatched_casts),
+            err=True,
+        )
+    report = new_report(
+        split, started.isoformat(timespec="seconds"), [row], None, corpus_root
+    )
+    _write(report, out_dir, started)
 
 
 @main.command("compare")

@@ -215,7 +215,7 @@ def groundings(
     model: str | None = None,
 ) -> list[Grounding]:
     """One grounding per record, relation and stated property of *graph* whose
-    ``evidence`` holds a span."""
+    ``evidence`` holds a span; none for a known entity's record."""
     out: list[Grounding] = []
 
     def add(found: dict[str, Any] | None, **target: Any) -> None:
@@ -241,6 +241,8 @@ def groundings(
         )
 
     for record in graph.records:
+        if "known" in (record.evidence or {}):
+            continue  # stated by the source, not read from the text
         target = {"vertex": record.type, "ref": record.ref}
         add(record.evidence, kind="vertex", **target)
         for name, prop in record.props.items():

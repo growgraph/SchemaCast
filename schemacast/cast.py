@@ -65,7 +65,7 @@ from schemacast.sink import MemoryQuarantineSink, QuarantineRecord, QuarantineSi
 from schemacast.validate import Finding, Fix, Validation, validate
 
 #: Version of the files a cast writes; bumped when a record's meaning changes.
-OUTPUT_FORMAT_VERSION = 5
+OUTPUT_FORMAT_VERSION = 6
 
 #: Repair requests after the first reply, at most.
 MAX_REPAIRS = 2
@@ -119,8 +119,11 @@ class EpisodeResult(BaseModel):
         default=None,
         description="Why a repair request failed; the best earlier attempt is kept.",
     )
-    mentions: int = 0
+    mentions: int = Field(default=0, description="Records read from the text.")
     relations: int = 0
+    known: int = Field(
+        default=0, description="Known entities a relation uses (refs ``k1``…)."
+    )
     quarantined: int = Field(default=0, description="Items left out.")
     unmapped: int = 0
     fixes: list[Fix] = Field(default_factory=list)
@@ -274,7 +277,12 @@ class SchemaCaster:
 
     async def _cast_episode(self, episode: Episode) -> EpisodeOutcome:
         try:
-            selection = select(self.schema, episode.text, self.selection)
+            selection = select(
+                self.schema,
+                episode.text,
+                self.selection,
+                pinned=[entity.vertex_type for entity in episode.known],
+            )
         except SelectionError as error:
             return self._fail(
                 episode,
@@ -334,7 +342,7 @@ class SchemaCaster:
         )
         shape = episode_shape(slice_)
         current = first = validate(
-            extraction.wire, slice_, episode.text, episode.context
+            extraction.wire, slice_, episode.text, episode.context, episode.known
         )
         current_reply = extraction.completion.content
         best, best_reply = current, current_reply
@@ -362,7 +370,9 @@ class SchemaCaster:
                 requests += 1
                 repair_failure = _fault_kind(error)
                 break
-            current = validate(wire, slice_, episode.text, episode.context)
+            current = validate(
+                wire, slice_, episode.text, episode.context, episode.known
+            )
             current_reply = completion.content
             if current.kept >= best.kept:
                 best, best_reply = current, current_reply
@@ -385,8 +395,9 @@ class SchemaCaster:
                 source_id=episode.source_id,
                 status=status,
                 failure="nothing_valid" if status == "failed" else None,
-                mentions=len(graph.records),
+                mentions=len(best.mentions),
                 relations=len(graph.relations),
+                known=len(best.known),
                 quarantined=len(removed),
                 unmapped=len(best.unmapped),
                 fixes=best.fixes,

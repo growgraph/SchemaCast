@@ -24,6 +24,7 @@ from schemacast.bench.corpus import (
 from schemacast.bench.oracle import ORACLE, oracle_client, oracle_pick_reply
 from schemacast.bench.score import (
     Counts,
+    Misses,
     ref_handles,
     score_episode,
     score_picks,
@@ -55,6 +56,10 @@ class EpisodeRecord(BaseModel):
     status: str
     failure: str | None
     counts: Counts
+    misses: Misses = Field(
+        default_factory=Misses,
+        description="Expected items not matched and produced items matching none.",
+    )
 
 
 class CaseRecord(BaseModel):
@@ -83,6 +88,15 @@ class Row(BaseModel):
         "without a price for this model.",
     )
     cases: list[CaseRecord]
+    saved: bool = Field(
+        default=False,
+        description="Scored from saved casts: the first reply, the slice, tokens, "
+        "re-casts and picks are not measured.",
+    )
+    unmatched_casts: list[str] = Field(
+        default_factory=list,
+        description="Source ids of saved casts with no episode in the corpus; ignored.",
+    )
 
     @property
     def counts(self) -> Counts:
@@ -97,6 +111,10 @@ class BenchReport(BaseModel):
     corpus_modified: bool = Field(
         description="The cases differ from the pinned digest: not publishable."
     )
+    corpus_dir: str | None = Field(
+        default=None,
+        description="A corpus outside the package (``--corpus``): never publishable.",
+    )
     split: str
     schemacast_version: str = __version__
     graflo_version: str = Field(default_factory=lambda: version("graflo"))
@@ -106,7 +124,11 @@ class BenchReport(BaseModel):
 
     @property
     def publishable(self) -> bool:
-        return self.split == "test" and not self.corpus_modified
+        return (
+            self.split == "test"
+            and not self.corpus_modified
+            and self.corpus_dir is None
+        )
 
 
 def load_prices(
@@ -249,8 +271,16 @@ async def _episode(
         with track_usage() as usage:
             outcome = await caster.cast_episode(episode)
         context = {item.source_id: item.text for item in episode.context}
+        misses = Misses()
         counts = score_episode(
-            outcome, expected, case.schema_, episode.text, usage, context
+            outcome,
+            expected,
+            case.schema_,
+            episode.text,
+            usage,
+            context,
+            misses,
+            episode.known,
         )
         if recaster is not None:
             with track_usage() as again:
@@ -276,6 +306,7 @@ async def _episode(
         status=outcome.result.status,
         failure=outcome.result.failure,
         counts=counts,
+        misses=misses,
     )
 
 
@@ -365,13 +396,20 @@ async def run_row(
 
 
 def new_report(
-    split: str, started: str, rows: list[Row], prices_source: str | None
+    split: str,
+    started: str,
+    rows: list[Row],
+    prices_source: str | None,
+    corpus: Path | None = None,
 ) -> BenchReport:
-    """A report over *rows*, stamped with the corpus it ran against."""
-    digest = corpus_digest()
+    """A report over *rows*, stamped with the corpus it ran against: the
+    bundled one, or the one under *corpus* (``cases/`` and ``schemas/``)."""
+    digest = corpus_digest() if corpus is None else corpus_digest(corpus)
     return BenchReport(
+        corpus_version=CORPUS_VERSION if corpus is None else "external",
         corpus_digest=digest,
         corpus_modified=digest != CORPUS_DIGEST,
+        corpus_dir=None if corpus is None else str(corpus),
         split=split,
         started=started,
         prices_source=prices_source,

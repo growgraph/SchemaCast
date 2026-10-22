@@ -17,12 +17,16 @@ Lanes:
   (``200 kV``) seeds that property's owner.
 
 A hit on a property seeds its owner — the vertex or edge — at half weight.
+
+The caller may pin vertex types (those of an episode's known entities): they
+seed closure ahead of every hit, so they are always in the slice.
 """
 
 from __future__ import annotations
 
 import re
 from collections import defaultdict
+from collections.abc import Sequence
 from typing import Literal
 
 from graflo.architecture.graph_types.identifiers import EdgeId
@@ -172,6 +176,10 @@ class Selection(BaseModel):
         description="``whole``: the schema fit the budget and was passed as is."
     )
     seeds: list[SeedHit] = Field(description="Seeds, best first.")
+    pinned: list[str] = Field(
+        default_factory=list,
+        description="Vertex types the caller pinned, seeded ahead of the hits.",
+    )
     elision: ElisionReport | None = Field(
         default=None, description="What closure left out; None when whole."
     )
@@ -470,29 +478,46 @@ def _fits(schema: Schema, metrics: RetrievalMetrics, budget: Budget) -> bool:
 
 
 def select(
-    schema: Schema, text: str, config: SelectionConfig | None = None
+    schema: Schema,
+    text: str,
+    config: SelectionConfig | None = None,
+    *,
+    pinned: Sequence[str] = (),
 ) -> Selection:
     """Choose the schema a cast of *text* runs against.
 
+    *pinned* vertex types are always in the slice, seeded ahead of retrieval
+    hits; a type the schema does not declare is ignored.
+
     Raises:
-        SelectionError: the text is empty, or the schema is over budget and
-            nothing in the text matched it.
+        SelectionError: the text is empty, or the schema is over budget, nothing
+            in the text matched it and nothing is pinned.
     """
     config = config or SelectionConfig()
     if not text.strip():
         raise SelectionError("The text is empty.", reason="empty_text")
     hits, metrics = retrieve(schema, text, config)
+    declared = schema.core_schema.vertex_config.vertex_set
+    pins = list(dict.fromkeys(t for t in pinned if t in declared))
     budget = config.budget
     if _fits(schema, metrics, budget):
-        return Selection(slice=schema, mode="whole", seeds=hits, metrics=metrics)
-    if not hits:
+        return Selection(
+            slice=schema, mode="whole", seeds=hits, pinned=pins, metrics=metrics
+        )
+    if not hits and not pins:
         raise SelectionError(
             "Nothing in the text matched the schema, and the schema is too large "
             f"to pass whole (~{metrics.schema_tokens} tokens).",
             reason="no_match",
             metrics=metrics,
         )
-    sliced, elision = subschema(schema, [hit.seed for hit in hits], budget=budget)
+    seeds: list[Seed] = [*pins, *(hit.seed for hit in hits)]
+    sliced, elision = subschema(schema, seeds, budget=budget)
     return Selection(
-        slice=sliced, mode="slice", seeds=hits, elision=elision, metrics=metrics
+        slice=sliced,
+        mode="slice",
+        seeds=hits,
+        pinned=pins,
+        elision=elision,
+        metrics=metrics,
     )

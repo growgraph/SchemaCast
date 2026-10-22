@@ -15,8 +15,10 @@ A pick (``save_picks``) writes ``picks.jsonl`` (one pick per staged record),
 ``episodes.jsonl`` and ``manifest.json`` to its own directory.
 
 With a database, ``staged.jsonl`` holds what is still staged after the lookups
-there. ``manifest.json`` names the ``output_format_version``. Version 5: a cast
+there. ``manifest.json`` names the ``output_format_version``. Version 6: a cast
 is a record graph, quotes and spans in ``evidence``; ``unmapped`` is outside it.
+A record of a known entity (ref ``k1``…) has ``evidence`` ``{"known": role,
+"label": label}`` and no quote or span, and no grounding.
 """
 
 from __future__ import annotations

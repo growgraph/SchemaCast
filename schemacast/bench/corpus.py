@@ -10,6 +10,11 @@ are merged.
 A family isolates one failure mode; its instances are that failure mode in
 different domains.
 
+Beside the graph a text states, ``expected.yaml`` may give ``forbidden``
+items a cast must not write and ``allowed`` items it may write without being
+required to; an outside corpus in the same layout loads with
+:func:`corpus_dirs`.
+
 The expected graph is exact: every quote it gives occurs in the text, and
 every value is what the schema's field makes of it. ``test_bench`` checks both,
 and that an oracle replying with the expected graph scores perfectly.
@@ -27,7 +32,7 @@ from typing import Any, Literal
 
 import yaml
 from graflo.architecture.schema.document import Schema
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from schemacast.episode import Episode, read_episodes
 
@@ -38,10 +43,10 @@ SPLITS_FILE = CASES_DIR / "SPLITS.yaml"
 
 #: Bump whenever a case, schema or split assignment changes. Results from
 #: different versions are not comparable.
-CORPUS_VERSION = "1.2.0"
+CORPUS_VERSION = "1.3.0"
 
 #: Content hash of ``cases/`` and ``schemas/`` at :data:`CORPUS_VERSION`.
-CORPUS_DIGEST = "62a0496dfb26492a0b851d9ceb02cd11f5a9a63037b9dc4fc1d7b6472a9d8dcb"
+CORPUS_DIGEST = "6a293a0455ccd4ea0dc59fe0583fe0a53db232a710949f83b48e2dd2fbdd7e97"
 
 Split = Literal["dev", "test"]
 
@@ -129,14 +134,26 @@ class ExpectedGraph(BaseModel):
 
 
 class ExpectedEpisode(ExpectedGraph):
-    """What one episode states, and what a cast of it must not write.
+    """What one episode states, what a cast of it must not write, and what it
+    may write.
 
     ``forbidden`` holds items an obedient or careless model would produce: what
     an injected instruction asks for, or an entity the text gives no identity.
-    Its edges may use handles of either graph.
+    ``allowed`` holds items a cast may produce without being required to: an
+    entity or relation the text implies but does not state. A produced item
+    matching one counts neither as right nor as wrong. The edges of either may
+    use handles of the expected graph; their own handles must differ from its.
     """
 
     forbidden: ExpectedGraph = Field(default_factory=ExpectedGraph)
+    allowed: ExpectedGraph = Field(default_factory=ExpectedGraph)
+
+    @model_validator(mode="after")
+    def _distinct_handles(self) -> ExpectedEpisode:
+        shared = set(self.vertices) & set(self.allowed.vertices)
+        if shared:
+            raise ValueError(f"allowed reuses expected handles {sorted(shared)}")
+        return self
 
 
 class ExpectedCandidate(BaseModel):
@@ -339,6 +356,18 @@ def load_corpus(
         )
         for path in sorted(cases_dir.rglob("case.yaml"))
     ]
+
+
+def corpus_dirs(root: Path) -> tuple[Path, Path]:
+    """``root/cases`` and ``root/schemas``: a corpus laid out like the bundled one.
+
+    Raises:
+        ValueError: *root* has no ``cases/SPLITS.yaml`` or no ``schemas/``.
+    """
+    cases, schemas = root / "cases", root / "schemas"
+    if not (cases / "SPLITS.yaml").is_file() or not schemas.is_dir():
+        raise ValueError(f"{root}: expected cases/SPLITS.yaml and schemas/")
+    return cases, schemas
 
 
 def corpus_digest(bench_dir: Path = BENCH_DIR) -> str:

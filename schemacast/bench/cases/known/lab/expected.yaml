@@ -1,0 +1,28 @@
+# k1 is the episode's first known entity a cast can use: one whose type is in
+# the schema and whose key is exactly that type's identity.
+known-lab-1:
+    vertices:
+        s:
+            type: Sample
+            quote: aliquot S-0412
+            props:
+                sample_id: S-0412
+    edges:
+    -   relation: DERIVED_FROM
+        from: s
+        to: k1
+        quote: Split off aliquot S-0412
+known-lab-2:
+    vertices:
+        r:
+            type: Run
+            quote: Ran
+            props:
+                duration:
+                    value: 12.0
+                    quote: 12 min
+    edges:
+    -   relation: ANALYSED
+        from: r
+        to: k1
+        quote: Ran it

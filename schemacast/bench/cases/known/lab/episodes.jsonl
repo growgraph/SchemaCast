@@ -1,0 +1,2 @@
+{"source_id": "known-lab-1", "text": "Split off aliquot S-0412 for the stability series.", "known": [{"vertex_type": "Sample", "key": {"sample_id": "S-0400"}, "role": "subject", "label": "S-0400"}]}
+{"source_id": "known-lab-2", "text": "Ran it for 12 min.", "known": [{"vertex_type": "Freezer", "key": {"rack": "R4"}, "role": "location"}, {"vertex_type": "Sample", "key": {"sample_id": "S-0400"}, "role": "subject"}]}

@@ -63,7 +63,7 @@ def test_import_loads_nothing_heavy():
         "schemacast.select, schemacast.prompt, schemacast.extract, schemacast.validate, schemacast.repair, "
         "schemacast.ground, schemacast.sink, schemacast.cast, schemacast.output, schemacast.write, "
         "schemacast.schema_io, schemacast.pick, schemacast.bench.cli, schemacast.bench.corpus, schemacast.bench.score, "
-        "schemacast.bench.oracle, schemacast.bench.run, schemacast.bench.report"
+        "schemacast.bench.oracle, schemacast.bench.run, schemacast.bench.report, schemacast.bench.saved"
     )
     assert loaded == ""
 

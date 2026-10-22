@@ -8,8 +8,8 @@ episode goes through the same steps, and episodes run concurrently.
 
 | Step | What happens |
 |---|---|
-| **Select** | The text is matched against the schema's names, other names and units, and the best matches seed graflo's `subschema()`, which closes them into a valid slice under a budget. A schema under budget passes whole. |
-| **Prompt** | The slice is rendered as a type sheet. The text follows inside a delimited block, after a sentence saying it is data, not instructions. The same episode and slice always give the same bytes. |
+| **Select** | The text is matched against the schema's names, other names and units, and the best matches seed graflo's `subschema()`, which closes them into a valid slice under a budget. A schema under budget passes whole. The types of an episode's [known entities](context.md#known-entities) are always in the slice. |
+| **Prompt** | The slice is rendered as a type sheet. The text follows inside a delimited block, after a sentence saying it is data, not instructions; known entities sit in a block of their own before it. The same episode and slice always give the same bytes. |
 | **Extract** | One model call. The reply is flat: a list of vertices (each with a `ref`, a `type`, a `quote` and name–value properties), a list of edges between refs, and `unmapped` for what no type covers. |
 | **Validate** | Every item is checked against the slice and the text. Values are coerced to their field type, an edge given backwards is turned round, and quotes are matched ignoring case, accents and whitespace; each fix is recorded. What is still wrong is a finding. |
 | **Repair** | If there are findings, the model is shown them, grouped by kind, and asked for its whole reply again; at most twice. The attempt that keeps the most items wins. |
@@ -29,6 +29,7 @@ chunking, no encoder and no vector store. An episode longer than
 | Finding | The item it removes |
 |---|---|
 | `unknown_type` | a vertex whose type is not in the slice |
+| `known_ref` | a vertex given the ref of a known entity (`k1`…); edges to that ref stay |
 | `duplicate_ref` | a second vertex with the same `ref` |
 | `identity_insufficient` | nothing: a mention the text introduces with no complete key is kept, and one repair asks for a key the reply may have left out (see [Mentions and resolution](identities.md)) |
 | `undeclared_edge` | an edge whose relation the slice does not declare between those types, either way round |

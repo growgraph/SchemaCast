@@ -7,9 +7,13 @@ from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 JsonScalar = str | int | float | bool | None
+KeyValue = str | int | float | bool
+
+#: Known entities an episode may carry, at most.
+MAX_KNOWN = 8
 
 
 class ContextItem(BaseModel):
@@ -19,6 +23,37 @@ class ContextItem(BaseModel):
 
     source_id: str = Field(description="Identifier of the earlier text.")
     text: str = Field(description="Its text.")
+
+
+class KnownEntity(BaseModel):
+    """An entity the text belongs to or is about, identified by its source.
+
+    The model may relate to it by ref but never adds it as a vertex or states
+    its properties: its identity comes from the source, never from the text.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    vertex_type: str = Field(min_length=1, description="Its vertex type.")
+    key: dict[str, KeyValue] = Field(
+        min_length=1,
+        description="Its primary identity: every identity field of the type and "
+        "nothing else, or it is not shown.",
+    )
+    role: str = Field(
+        pattern=r"^[a-z][a-z_]*$",
+        description="What it is to the text, e.g. ``subject``: the record the "
+        "text belongs to.",
+    )
+    label: str | None = Field(default=None, description="A name shown to the model.")
+
+    @field_validator("key")
+    @classmethod
+    def _no_empty_values(cls, key: dict[str, KeyValue]) -> dict[str, KeyValue]:
+        empty = [name for name, value in key.items() if value is None or value == ""]
+        if empty:
+            raise ValueError(f"key fields without a value: {', '.join(empty)}")
+        return key
 
 
 class Episode(BaseModel):
@@ -46,6 +81,29 @@ class Episode(BaseModel):
         default_factory=list,
         description="Preceding texts in the thread, for resolving references only.",
     )
+    known: list[KnownEntity] = Field(
+        default_factory=list,
+        description=f"Entities the source names, at most {MAX_KNOWN}; an edge the "
+        "text states may end at one.",
+    )
+
+    @field_validator("known")
+    @classmethod
+    def _distinct_known(cls, known: list[KnownEntity]) -> list[KnownEntity]:
+        if len(known) > MAX_KNOWN:
+            raise ValueError(f"at most {MAX_KNOWN} known entities, got {len(known)}")
+        seen: set[tuple[str, tuple[tuple[str, str], ...]]] = set()
+        for entity in known:
+            identity = (
+                entity.vertex_type,
+                tuple(sorted((k, repr(v)) for k, v in entity.key.items())),
+            )
+            if identity in seen:
+                raise ValueError(
+                    f"{entity.vertex_type} {entity.key} is given more than once"
+                )
+            seen.add(identity)
+        return known
 
 
 class EpisodeFileError(ValueError):

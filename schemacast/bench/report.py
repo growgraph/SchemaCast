@@ -90,9 +90,38 @@ RATES: dict[str, Rate] = {
 }
 
 
-def rates(counts: Counts) -> dict[str, float | None]:
-    """Every rate of :data:`RATES` for *counts*."""
-    return {name: rate(counts) for name, rate in RATES.items()}
+#: Rates a row scored from saved casts cannot measure (:attr:`Row.saved`).
+NOT_MEASURED_SAVED = frozenset(
+    {
+        "conformance",
+        "conformance_final",
+        "type_hallucination",
+        "relation_hallucination",
+        "property_hallucination",
+        "ungrounded",
+        "unfaithful_value",
+        "seed_recall",
+        "closure_recall",
+        "closure_edge_recall",
+        "recast_added",
+        "recast_duplicated",
+        "pick_accuracy",
+        "pick_wrong_link",
+        "tokens_per_episode",
+    }
+)
+
+#: Shown for a rate the row does not measure.
+NOT_MEASURED = "n/m"
+
+
+def rates(counts: Counts, *, saved: bool = False) -> dict[str, float | None]:
+    """Every rate of :data:`RATES` for *counts*; with *saved*, those of
+    :data:`NOT_MEASURED_SAVED` are None."""
+    return {
+        name: None if saved and name in NOT_MEASURED_SAVED else rate(counts)
+        for name, rate in RATES.items()
+    }
 
 
 def case_score(counts: Counts) -> float | None:
@@ -107,6 +136,57 @@ def case_score(counts: Counts) -> float | None:
 
 def _fmt(value: float | None, digits: int = 2) -> str:
     return "—" if value is None else f"{value:.{digits}f}"
+
+
+def _cell(row: Row, name: str, value: float | None, digits: int = 2) -> str:
+    """*value* of rate *name*, or :data:`NOT_MEASURED` when *row* cannot measure it."""
+    if row.saved and name in NOT_MEASURED_SAVED:
+        return NOT_MEASURED
+    return _fmt(value, digits)
+
+
+def _count(row: Row, value: str) -> str:
+    return NOT_MEASURED if row.saved else value
+
+
+def _misses(report: BenchReport) -> list[str]:
+    lines = [
+        "",
+        "## Misses",
+        "",
+        (
+            "Per episode: *expected* items no produced item matched, and *produced* "
+            "items that matched no expected or allowed item."
+        ),
+        "",
+    ]
+    any_miss = False
+    for row in report.rows:
+        for case in row.cases:
+            for episode in case.episodes:
+                misses = episode.misses
+                if misses.empty:
+                    continue
+                any_miss = True
+                lines.append(
+                    f"- **{row.label}** · `{case.name}` · `{episode.source_id}`"
+                )
+                for title, items in (
+                    ("expected entity", misses.expected_entities),
+                    ("expected edge", misses.expected_edges),
+                    ("produced entity", misses.produced_entities),
+                    ("produced edge", misses.produced_edges),
+                ):
+                    lines += [f"    - {title}: {item}" for item in items]
+        if row.unmatched_casts:
+            any_miss = True
+            lines.append(
+                f"- **{row.label}**: saved casts with no episode in the corpus, "
+                "ignored: " + ", ".join(f"`{s}`" for s in row.unmatched_casts)
+            )
+    if not any_miss:
+        lines.append("None.")
+    return lines
 
 
 def _table(header: list[str], rows: list[list[str]]) -> list[str]:
@@ -131,7 +211,9 @@ def to_markdown(report: BenchReport) -> str:
         if report.publishable
         else "**not publishable**: "
         + (
-            "the cases differ from the pinned corpus"
+            "a corpus outside the package"
+            if report.corpus_dir is not None
+            else "the cases differ from the pinned corpus"
             if report.corpus_modified
             else "only `--split test` is held out"
         )
@@ -146,6 +228,17 @@ def to_markdown(report: BenchReport) -> str:
         ),
         "",
         "Conformance and hallucination read the first reply, before any repair.",
+        *(
+            [
+                "",
+                (
+                    f"{NOT_MEASURED}: not measured. A row scored from saved casts "
+                    "has no first reply, slice, tokens, re-cast or pick."
+                ),
+            ]
+            if any(row.saved for row in report.rows)
+            else []
+        ),
         "",
         "## Summary",
         "",
@@ -154,27 +247,29 @@ def to_markdown(report: BenchReport) -> str:
     for row in report.rows:
         r = rates(row.counts)
         c = row.counts
+
+        cell = {name: _cell(row, name, value) for name, value in r.items()}
         summary.append(
             [
                 row.label,
                 str(c.episodes),
                 str(c.failed),
-                _fmt(r["conformance"]),
-                _fmt(r["conformance_final"]),
-                _fmt(r["type_hallucination"]),
-                _fmt(r["relation_hallucination"]),
-                _fmt(r["property_hallucination"]),
-                _fmt(r["ungrounded"]),
-                _fmt(r["unfaithful_value"]),
-                _fmt(r["entity_f1"]),
-                _fmt(r["edge_f1"]),
-                _fmt(r["property_precision"]),
-                _fmt(r["property_recall"]),
-                _fmt(r["direction"]),
-                _fmt(r["span_accuracy"]),
+                cell["conformance"],
+                cell["conformance_final"],
+                cell["type_hallucination"],
+                cell["relation_hallucination"],
+                cell["property_hallucination"],
+                cell["ungrounded"],
+                cell["unfaithful_value"],
+                cell["entity_f1"],
+                cell["edge_f1"],
+                cell["property_precision"],
+                cell["property_recall"],
+                cell["direction"],
+                cell["span_accuracy"],
                 f"{c.forbidden_written}/{c.forbidden_expected}",
-                _fmt(r["tokens_per_episode"], 0),
-                _fmt(r["requests_per_episode"]),
+                _cell(row, "tokens_per_episode", r["tokens_per_episode"], 0),
+                cell["requests_per_episode"],
                 "n/a" if row.usd is None else f"{row.usd:.4f}",
             ]
         )
@@ -261,10 +356,11 @@ def to_markdown(report: BenchReport) -> str:
         [
             [
                 row.label,
-                str(row.counts.sliced),
-                _fmt(rates(row.counts)["seed_recall"]),
-                _fmt(rates(row.counts)["closure_recall"]),
-                _fmt(rates(row.counts)["closure_edge_recall"]),
+                _count(row, str(row.counts.sliced)),
+                *(
+                    _cell(row, name, rates(row.counts)[name])
+                    for name in ("seed_recall", "closure_recall", "closure_edge_recall")
+                ),
             ]
             for row in report.rows
         ],
@@ -285,11 +381,15 @@ def to_markdown(report: BenchReport) -> str:
         [
             [
                 row.label,
-                str(row.counts.recast_vertices),
-                f"{row.counts.recast_added} ({_fmt(rates(row.counts)['recast_added'])})",
-                (
+                _count(row, str(row.counts.recast_vertices)),
+                _count(
+                    row,
+                    f"{row.counts.recast_added} ({_fmt(rates(row.counts)['recast_added'])})",
+                ),
+                _count(
+                    row,
                     f"{row.counts.recast_duplicated} "
-                    f"({_fmt(rates(row.counts)['recast_duplicated'])})"
+                    f"({_fmt(rates(row.counts)['recast_duplicated'])})",
                 ),
             ]
             for row in report.rows
@@ -312,21 +412,27 @@ def to_markdown(report: BenchReport) -> str:
         [
             [
                 row.label,
-                str(row.counts.picks_expected),
-                str(row.counts.picks_offered),
-                (
-                    f"{row.counts.picks_correct} "
-                    f"({_fmt(rates(row.counts)['pick_accuracy'])})"
+                *(
+                    _count(row, value)
+                    for value in (
+                        str(row.counts.picks_expected),
+                        str(row.counts.picks_offered),
+                        (
+                            f"{row.counts.picks_correct} "
+                            f"({_fmt(rates(row.counts)['pick_accuracy'])})"
+                        ),
+                        (
+                            f"{row.counts.picks_wrong} "
+                            f"({_fmt(rates(row.counts)['pick_wrong_link'])})"
+                        ),
+                        str(row.counts.picks_rejected),
+                    )
                 ),
-                (
-                    f"{row.counts.picks_wrong} "
-                    f"({_fmt(rates(row.counts)['pick_wrong_link'])})"
-                ),
-                str(row.counts.picks_rejected),
             ]
             for row in report.rows
         ],
     )
+    lines += _misses(report)
     if report.prices_source:
         lines += ["", f"Prices: {report.prices_source}"]
     return "\n".join(lines) + "\n"
@@ -337,9 +443,9 @@ def write_report(report: BenchReport, out_dir: Path, stamp: str) -> tuple[Path, 
     out_dir.mkdir(parents=True, exist_ok=True)
     data = report.model_dump(mode="json")
     for row, raw in zip(report.rows, data["rows"], strict=True):
-        raw["rates"] = rates(row.counts)
+        raw["rates"] = rates(row.counts, saved=row.saved)
         for case, case_raw in zip(row.cases, raw["cases"], strict=True):
-            case_raw["rates"] = rates(case.counts)
+            case_raw["rates"] = rates(case.counts, saved=row.saved)
             case_raw["score"] = case_score(case.counts)
     json_path = out_dir / f"{stamp}.json"
     md_path = out_dir / f"{stamp}.md"

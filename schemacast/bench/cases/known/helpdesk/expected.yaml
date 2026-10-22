@@ -1,0 +1,42 @@
+# k1 is the episode's first known entity a cast can use: one whose type is in
+# the schema and whose key is exactly that type's identity.
+known-helpdesk-1:
+    vertices:
+        p:
+            type: Product
+            quote: AX-200 controller
+            mention: true
+            props:
+                sku: AX-200
+        d:
+            type: Ticket
+            quote: HD-7302
+            mention: true
+            props:
+                number: HD-7302
+    edges:
+    -   relation: ABOUT
+        from: k1
+        to: p
+        quote: Reproduced with the AX-200 controller
+    -   relation: DUPLICATE_OF
+        from: k1
+        to: d
+        quote: same fault as HD-7302
+known-helpdesk-2:
+    vertices:
+        a:
+            type: Agent
+            quote: Agent sam
+            props:
+                handle: sam
+    edges:
+    -   relation: HANDLES
+        from: a
+        to: k1
+        quote: Agent sam took this ticket over
+    forbidden:
+        vertices:
+            dup:
+                type: Ticket
+                quote: this ticket
