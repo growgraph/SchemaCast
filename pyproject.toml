@@ -39,7 +39,7 @@ classifiers = [
 ]
 dependencies = [
   "click>=8.2.0,<9",
-  "graflo>=1.21.0,<2",
+  "graflo>=1.24.0,<2",
   "openai>=1.109.0,<3",
   "pydantic-settings>=2.12.0",
   "pydantic>=2.12.5",

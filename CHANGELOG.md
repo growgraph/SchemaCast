@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`gather_candidates`) and to the entities its metadata names, in one call: per mention, a
   candidate id from an enum or `none`, checked without a model. `schemacast pick`, `POST /pick`,
   `Picker`, `apply_picks` (a pick links, never writes); cached and replayable like the cast.
+  Each candidate is shown with every lane that found it and graflo's attribute verdicts
+  (`agrees`, `contradicts`, `unknown`); a metadata entity that is already a candidate adds its
+  lane. Needs graflo 1.24.0 (`EntityCandidate.lanes`, `attributes`).
+- Bench corpus 1.4.0: `pick.yaml` candidates carry `lanes` and `attributes`, as graflo's
+  `EntityCandidate` does.
 - **Known entities**: `Episode.known` (`KnownEntity`: `vertex_type`, `key`, `role`, `label`) names
   records the text belongs to. Their types are pinned into the slice, they are shown in a `# KNOWN`
   block as refs `k1`…, and an edge may end at one; restating one is a `known_ref` finding. A used

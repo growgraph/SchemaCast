@@ -43,10 +43,10 @@ SPLITS_FILE = CASES_DIR / "SPLITS.yaml"
 
 #: Bump whenever a case, schema or split assignment changes. Results from
 #: different versions are not comparable.
-CORPUS_VERSION = "1.3.0"
+CORPUS_VERSION = "1.4.0"
 
 #: Content hash of ``cases/`` and ``schemas/`` at :data:`CORPUS_VERSION`.
-CORPUS_DIGEST = "6a293a0455ccd4ea0dc59fe0583fe0a53db232a710949f83b48e2dd2fbdd7e97"
+CORPUS_DIGEST = "eb9c58e3938dd94fd4fd8196684dec08861686fd85ca3ee0389b32a24d9d67ee"
 
 Split = Literal["dev", "test"]
 
@@ -156,22 +156,42 @@ class ExpectedEpisode(ExpectedGraph):
         return self
 
 
-class ExpectedCandidate(BaseModel):
-    """An entity offered to a pick, as graflo's ``EntityCandidate`` holds it.
+class ExpectedHit(BaseModel):
+    """One way a candidate was found, as graflo's ``CandidateHit`` holds it.
 
     ``anchor`` names an expected vertex handle of the same episode.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    type: str
-    key: dict[str, Any]
-    label: str | None = None
-    lane: str = "metadata"
+    lane: str
     matched: str | None = None
     relation: str | None = None
     anchor: str | None = None
     role: str | None = None
+
+
+class ExpectedAttribute(BaseModel):
+    """A stated property checked against the candidate, as graflo's
+    ``AttributeCheck`` holds it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: str
+    verdict: str
+    compare: str = "literal"
+
+
+class ExpectedCandidate(BaseModel):
+    """An entity offered to a pick, as graflo's ``EntityCandidate`` holds it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    key: dict[str, Any]
+    label: str | None = None
+    lanes: list[ExpectedHit] = Field(min_length=1)
+    attributes: list[ExpectedAttribute] = Field(default_factory=list)
 
 
 class ExpectedPickMention(BaseModel):

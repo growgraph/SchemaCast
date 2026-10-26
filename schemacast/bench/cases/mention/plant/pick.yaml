@@ -8,12 +8,14 @@ mention-plant-1:
                 key:
                     email: lars@plant.example
                 label: Lars Berg
-                lane: alternate
-                matched: phone=+47 555 0199
+                lanes:
+                -   lane: alternate
+                    matched: phone=+47 555 0199
             -   type: Person
                 key:
                     email: ingrid@plant.example
                 label: Ingrid Dahl
-                lane: alternate
-                matched: phone=+47 555 0199
+                lanes:
+                -   lane: alternate
+                    matched: phone=+47 555 0199
             pick:

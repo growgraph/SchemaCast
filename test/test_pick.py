@@ -17,6 +17,8 @@ from graflo.db.manager import ConnectionManager
 from graflo.hq.container_write import write_container
 from graflo.link.candidates import gather_candidates
 from graflo.link.records import (
+    AttributeCheck,
+    CandidateHit,
     EntityCandidate,
     PartialRecord,
     RecordGraph,
@@ -110,19 +112,18 @@ JO = EntityCandidate(
     vertex_type="Customer",
     key={"account": "ACC-31"},
     label="Jo Andersson",
-    lane="relation",
-    relation="RAISED",
-    anchor="t",
+    lanes=[CandidateHit(lane="relation", relation="RAISED", anchor="t")],
 )
 PRIYA = EntityCandidate(
     vertex_type="Customer",
     key={"account": "ACC-12"},
     label="Priya Nair",
-    lane="metadata",
-    role="speaker",
+    lanes=[CandidateHit(lane="metadata", role="speaker")],
 )
 KIM = EntityCandidate(
-    vertex_type="Agent", key={"handle": "kim"}, lane="metadata", role="speaker"
+    vertex_type="Agent",
+    key={"handle": "kim"},
+    lanes=[CandidateHit(lane="metadata", role="speaker")],
 )
 
 
@@ -229,6 +230,77 @@ def test_one_call_offers_ids_as_enums_and_text_as_data(make_client):
 def test_the_prompt_is_byte_deterministic():
     item = _item(JO, entities=[PRIYA])
     assert pick_messages(item, offers(item)) == pick_messages(item, offers(item))
+
+
+# -- evidence ----------------------------------------------------------------
+
+JO_BY_NAME = EntityCandidate(
+    vertex_type="Customer",
+    key={"account": "ACC-31"},
+    label="Jo Andersson",
+    lanes=[CandidateHit(lane="exact", matched="Jo Andersson")],
+)
+
+
+def _mentions(item: PickItem) -> list[str]:
+    user = pick_messages(item, offers(item))[1]["content"]
+    return [line for line in user.splitlines() if line.startswith("  c")]
+
+
+def test_one_lane_and_no_attributes_render_as_one_way_found():
+    assert _mentions(
+        _item(
+            JO_BY_NAME,
+            JO.model_copy(update={"key": {"account": "ACC-7"}}),
+            graph=_graph(),
+        )
+    ) == [
+        '  c1: "Jo Andersson" (Customer; account="ACC-31"); found by exact: "Jo Andersson"',
+        '  c2: "Jo Andersson" (Customer; account="ACC-7"); found by relation: linked by RAISED to "HD-4411"',
+    ]
+
+
+def test_every_lane_and_the_attribute_verdicts_are_shown():
+    jo = JO_BY_NAME.model_copy(
+        update={
+            "lanes": [*JO_BY_NAME.lanes, *JO.lanes],
+            "attributes": [
+                AttributeCheck(field="name", verdict="agree", compare="literal"),
+                AttributeCheck(field="email", verdict="contradict", compare="literal"),
+                AttributeCheck(
+                    field="name_norm", verdict="unknown", compare="normalized"
+                ),
+            ],
+        }
+    )
+    (line,) = _mentions(_item(jo, graph=_graph()))
+    assert line == (
+        '  c1: "Jo Andersson" (Customer; account="ACC-31"); found by exact: '
+        '"Jo Andersson", relation: linked by RAISED to "HD-4411"; stated name '
+        "agrees, email contradicts, name_norm unknown (normalized)"
+    )
+
+
+def test_a_metadata_entity_already_a_candidate_adds_its_lane():
+    priya = JO_BY_NAME.model_copy(update={"key": PRIYA.key, "label": None})
+    (offer,) = offers(_item(priya, entities=[PRIYA]))
+    (candidate,) = offer.candidates.values()
+    assert [hit.lane for hit in candidate.lanes] == ["exact", "metadata"]
+    assert candidate.label == "Priya Nair"
+
+
+def test_the_check_ignores_evidence_against_a_candidate(make_client):
+    against = JO.model_copy(
+        update={
+            "attributes": [
+                AttributeCheck(field="email", verdict="contradict", compare="literal")
+            ]
+        }
+    )
+    result, _ = _pick(make_client, [_item(against)], _reply(("m1", "c1")))
+    assert [(p.outcome, p.key) for p in result.picks] == [
+        ("picked", {"account": "ACC-31"})
+    ]
 
 
 def test_none_and_an_unanswered_mention_link_nothing(make_client):

@@ -214,7 +214,12 @@ def pick_item(
 ) -> tuple[PickItem, dict[str, dict[str, Any] | None]]:
     """The pick input for a cast episode's staged mentions the case gives
     candidates for, and the expected key per mention ref."""
-    from graflo.link.records import EntityCandidate, StagedCandidates
+    from graflo.link.records import (
+        AttributeCheck,
+        CandidateHit,
+        EntityCandidate,
+        StagedCandidates,
+    )
     from graflo.link.resolve import resolve_records
 
     graph = outcome.graph
@@ -226,11 +231,19 @@ def pick_item(
             vertex_type=item.type,
             key=item.key,
             label=item.label,
-            lane=item.lane,
-            matched=item.matched,
-            relation=item.relation,
-            anchor=by_handle.get(item.anchor, item.anchor) if item.anchor else None,
-            role=item.role,
+            lanes=[
+                CandidateHit(
+                    lane=hit.lane,
+                    matched=hit.matched,
+                    relation=hit.relation,
+                    anchor=by_handle.get(hit.anchor, hit.anchor)
+                    if hit.anchor
+                    else None,
+                    role=hit.role,
+                )
+                for hit in item.lanes
+            ],
+            attributes=[AttributeCheck(**a.model_dump()) for a in item.attributes],
         )
 
     staged = []

@@ -45,7 +45,9 @@ neither as matched nor as produced. `forbidden` and `allowed` edges may use the 
 handles; `allowed` handles must differ from them. An edge may end at a known entity by its ref
 (`k1`…), which matches by ref and counts as no entity. An optional `pick.yaml` gives, for an episode's staged
 mentions (by handle), the candidates a resolver would gather, the entities the record names, and
-the expected `pick` (a key, or null when none fits). Every quote occurs in the text (a property may instead
+the expected `pick` (a key, or null when none fits). Candidates and entities are written as graflo's
+`EntityCandidate`: `type`, `key`, `label`, `lanes` (each a `lane` with its own fields; a relation's
+`anchor` is an expected handle) and optional `attributes`. Every quote occurs in the text (a property may instead
 name the `context` item its quote is in, for an identity value only) and every value is what
 its field makes of it; a test checks both, and that the oracle scores perfectly on the whole
 schema.

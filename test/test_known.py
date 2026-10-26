@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 from conftest import DATA
 from graflo.link.records import (
+    CandidateHit,
     EntityCandidate,
     PartialRecord,
     RecordGraph,
@@ -287,10 +288,14 @@ def test_a_related_known_entity_is_not_offered_for_the_mention():
         ],
     )
     speaker = EntityCandidate(
-        vertex_type="Person", key={"email": "bo@x.com"}, lane="metadata", role="speaker"
+        vertex_type="Person",
+        key={"email": "bo@x.com"},
+        lanes=[CandidateHit(lane="metadata", role="speaker")],
     )
     other = EntityCandidate(
-        vertex_type="Person", key={"email": "cy@x.com"}, lane="metadata", role="thread"
+        vertex_type="Person",
+        key={"email": "cy@x.com"},
+        lanes=[CandidateHit(lane="metadata", role="thread")],
     )
     (offer,) = offers(_pick_item(graph, [speaker, other]))
     assert list(offer.candidates.values()) == [other]
@@ -301,9 +306,7 @@ def test_a_related_known_entity_is_not_offered_for_the_mention():
     anchored = EntityCandidate(
         vertex_type="Person",
         key={"email": "di@x.com"},
-        lane="relation",
-        relation="KNOWS",
-        anchor="k1",
+        lanes=[CandidateHit(lane="relation", relation="KNOWS", anchor="k1")],
     )
     _, found = _describe(anchored, graph)
     assert found == 'relation: linked by KNOWS to "Bo"'

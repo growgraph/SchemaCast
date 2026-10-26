@@ -323,17 +323,21 @@ def test_a_replay_miss_stops_the_run(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 
 def test_a_pick_is_scored_by_what_it_links():
-    from graflo.link.records import EntityCandidate
+    from graflo.link.records import CandidateHit, EntityCandidate
 
     from schemacast.bench.score import score_picks
     from schemacast.pick import Pick
 
     spec = BY_NAME["mention/logistics"].picks["mention-logistics-1"]
     kari = EntityCandidate(
-        vertex_type="Driver", key={"license": "L-5210"}, lane="relation"
+        vertex_type="Driver",
+        key={"license": "L-5210"},
+        lanes=[CandidateHit(lane="relation", relation="DRIVES_FOR", anchor="d")],
     )
     ola = EntityCandidate(
-        vertex_type="Driver", key={"license": "L-4471"}, lane="metadata"
+        vertex_type="Driver",
+        key={"license": "L-4471"},
+        lanes=[CandidateHit(lane="metadata", role="subject")],
     )
 
     def _counts(outcome, candidate=None):
