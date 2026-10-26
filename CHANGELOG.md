@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`keys_apart` finding:** a vertex's complete keys must be stated in one sentence. A key a
+  sentence apart from the first is removed after a repair that asks for two vertices, so one record
+  never claims two entities are one.
 - **`pick`**: links an episode's staged mentions to the candidates graflo gathers
   (`gather_candidates`) and to the entities its metadata names, in one call: per mention, a
   candidate id from an enum or `none`, checked without a model. `schemacast pick`, `POST /pick`,

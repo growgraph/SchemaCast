@@ -25,6 +25,10 @@ GUIDANCE: dict[FindingKind, str] = {
         "text states for this entity. If the text states none, keep the vertex as it "
         "is; never invent a value."
     ),
+    "keys_apart": (
+        "A vertex states two keys from different sentences, so they name two entities: "
+        "give each its own vertex, with its own key, quote and edges."
+    ),
     "undeclared_edge": (
         "Use only the edge patterns listed under TYPES, with `from` of the source type "
         "and `to` of the target type. If none fits, move the relation to `unmapped`."

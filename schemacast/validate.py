@@ -16,6 +16,9 @@ finding is left out, and the rest of the reply stands.
 Validation decides no identity. A mention that introduces an entity but states
 no complete key gets one non-removing finding, so a repair can ask for a key
 the reply left out; the mention is kept either way, and resolution decides.
+A record that states two complete keys must find them in one sentence: a key
+a sentence apart from the first is removed (``keys_apart``), so one record
+never claims two entities are one.
 
 Kept mentions and relations are graflo records (``PartialRecord``,
 ``RecordRelation``); each one's quote and span, and each property's, are its
@@ -31,6 +34,7 @@ finding. Each known entity a kept relation uses becomes a record in
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 from typing import Any, Literal
 
@@ -39,7 +43,12 @@ from graflo.architecture.schema.coerce import CoercionError, coerce_value
 from graflo.architecture.schema.context import extractable_properties
 from graflo.architecture.schema.document import Schema
 from graflo.architecture.schema.edge import Edge
-from graflo.architecture.schema.key_contract import key_contract, key_status
+from graflo.architecture.schema.key_contract import (
+    KeyContract,
+    KeySet,
+    key_contract,
+    key_status,
+)
 from graflo.architecture.schema.vertex import Field as SchemaField
 from graflo.link.records import (
     PartialRecord,
@@ -52,7 +61,7 @@ from pydantic import BaseModel, Field
 from schemacast.episode import ContextItem, KnownEntity
 from schemacast.extract import WireExtraction, WireProp
 from schemacast.fidelity import value_mismatch
-from schemacast.ground import Span, UnmappedText, evidence, locate
+from schemacast.ground import Span, UnmappedText, evidence, locate, span_of
 from schemacast.prompt import known_refs
 
 FindingKind = Literal[
@@ -65,6 +74,7 @@ FindingKind = Literal[
     "value_not_in_quote",
     "quote_not_found",
     "identity_insufficient",
+    "keys_apart",
     "dangling_ref",
     "undeclared_edge",
     "endpoint_invalid",
@@ -75,6 +85,7 @@ FINDING_ORDER: tuple[FindingKind, ...] = (
     "known_ref",
     "duplicate_ref",
     "identity_insufficient",
+    "keys_apart",
     "undeclared_edge",
     "dangling_ref",
     "undeclared_property",
@@ -172,6 +183,49 @@ class Validation(BaseModel):
             records=[*self.mentions, *self.known],
             relations=self.relations,
         )
+
+
+#: Where one sentence ends and the next starts: a full stop, question or
+#: exclamation mark before whitespace, or a blank line.
+_SENTENCE_END = re.compile(r"[.!?]\s|\n\s*\n")
+
+
+def keys_apart(
+    contract: KeyContract, props: dict[str, StatedProp], text: str
+) -> list[str]:
+    """Key fields a record states a sentence apart from its first key.
+
+    Two complete keys on one record say they name one entity, and a text says
+    that within one sentence ("Juniper (2026.10)"). Keys a sentence apart most
+    often belong to two entities the reply merged ("firmware 3.0. The fix ships
+    in Juniper"), however wide its quote. The first complete key (primary
+    before alternate) stays; a key grounded in the episode's context is a
+    reference and never counts.
+    """
+
+    def reach(key: KeySet) -> tuple[int, int] | None:
+        spans = [span_of(props[field].evidence) for field in key.fields]
+        if any(span is None or span.context is not None for span in spans):
+            return None
+        return min(s.start for s in spans if s), max(s.end for s in spans if s)
+
+    placed = [
+        (key, at)
+        for key in (*contract.keys, *contract.alternates)
+        if all(field in props for field in key.fields)
+        and (at := reach(key)) is not None
+    ]
+    if len(placed) < 2:
+        return []
+    first, (start, end) = placed[0]
+
+    def together(at: tuple[int, int]) -> bool:
+        between = text[min(end, at[1]) : max(start, at[0])]
+        return _SENTENCE_END.search(between) is None
+
+    kept = set(first.fields)
+    apart = {f for key, at in placed[1:] if not together(at) for f in key.fields}
+    return sorted(apart - kept)
 
 
 def _dump(model: BaseModel) -> dict[str, Any]:
@@ -359,6 +413,20 @@ class _Checker:
                     **common,
                 )
                 continue
+            for name in keys_apart(key_contract(vertex), props, self.text):
+                j = next(j for j, p in enumerate(wv.props) if p.name == name)
+                quote = props.pop(name).evidence or {}
+                self.find(
+                    kind="keys_apart",
+                    scope="property",
+                    path=f"{path}.props[{j}]",
+                    ref=wv.ref,
+                    fragment=_dump(wv.props[j]),
+                    message=(
+                        f"{wv.ref!r} states {name!r} from {quote.get('quote')!r}, a "
+                        "sentence apart from its other key."
+                    ),
+                )
             introduces = not wv.mention
             values = {name: prop.value for name, prop in props.items()}
             gap = self.key_gap(wv.type, introduces, values)

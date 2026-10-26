@@ -32,6 +32,7 @@ chunking, no encoder and no vector store. An episode longer than
 | `known_ref` | a vertex given the ref of a known entity (`k1`…); edges to that ref stay |
 | `duplicate_ref` | a second vertex with the same `ref` |
 | `identity_insufficient` | nothing: a mention the text introduces with no complete key is kept, and one repair asks for a key the reply may have left out (see [Mentions and resolution](identities.md)) |
+| `keys_apart` | a second complete key a vertex states a sentence apart from its first (primary before alternate): one record would claim two entities are one ("firmware 3.0. The fix ships in Juniper" as one release). A repair asks for two vertices; keys in one sentence, such as "Juniper (2026.10)", pass |
 | `undeclared_edge` | an edge whose relation the slice does not declare between those types, either way round |
 | `dangling_ref` | an edge to a `ref` no vertex has |
 | `undeclared_property` | a property its type does not declare |

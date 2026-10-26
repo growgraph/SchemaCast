@@ -312,3 +312,64 @@ def test_a_non_identity_value_does_not_ground_in_context(plant):
     }
     result = validate(WireExtraction.model_validate(reply), plant, text, context)
     assert [f.kind for f in result.findings] == ["quote_not_found"]
+
+
+def _person(quote, *props):
+    return {
+        "vertices": [
+            {
+                "ref": "v1",
+                "type": "Person",
+                "quote": quote,
+                "props": [
+                    {"name": name, "value": value, "quote": value}
+                    for name, value in props
+                ],
+            }
+        ]
+    }
+
+
+def test_a_second_key_a_sentence_apart_is_removed(plant):
+    reply = _person("Ann (ann@x.com)", ("email", "ann@x.com"), ("phone", "+1 555"))
+
+    result = _check(plant, reply)
+
+    (finding,) = result.findings
+    assert (finding.kind, finding.scope, finding.path) == (
+        "keys_apart",
+        "property",
+        "vertices[0].props[1]",
+    )
+    assert [m.values() for m in result.mentions] == [{"email": "ann@x.com"}]
+
+
+def test_two_keys_in_one_sentence_are_kept(plant):
+    text = "Reach Ann at ann@x.com or +1 555 today."
+    reply = _person(
+        "Ann at ann@x.com or +1 555", ("email", "ann@x.com"), ("phone", "+1 555")
+    )
+
+    result = _check(plant, reply, text)
+
+    assert result.findings == []
+    assert result.mentions[0].values() == {"email": "ann@x.com", "phone": "+1 555"}
+
+
+def test_one_key_beside_its_mention_is_kept(plant):
+    result = _check(plant, _person("Ann", ("email", "ann@x.com")))
+
+    assert result.findings == []
+    assert result.mentions[0].values() == {"email": "ann@x.com"}
+
+
+def test_a_wider_quote_does_not_join_keys_a_sentence_apart(plant):
+    quote = (
+        "Ann (ann@x.com) operates press S-7, rated 200 kW, since 2024-03. Call +1 555"
+    )
+    reply = _person(quote, ("email", "ann@x.com"), ("phone", "+1 555"))
+
+    result = _check(plant, reply)
+
+    assert [f.kind for f in result.findings] == ["keys_apart"]
+    assert result.mentions[0].values() == {"email": "ann@x.com"}
