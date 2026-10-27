@@ -1,14 +1,18 @@
-"""The extraction prompt: order, determinism, and the data delimiter."""
+"""The extraction prompt: order, determinism, pinned bytes, and the data delimiter."""
 
+import hashlib
+import json
 from datetime import UTC, datetime
 
 import pytest
 from conftest import DATA
 from graflo.architecture.schema.context import render_type_sheet
 
-from schemacast.episode import ContextItem, Episode
-from schemacast.prompt import DATA_SENTENCE, build_messages
+from schemacast.episode import ContextItem, Episode, KnownEntity
+from schemacast.extract import episode_shape
+from schemacast.prompt import DATA_SENTENCE, build_messages, known_refs
 from schemacast.schema_io import load_schema
+from schemacast.select import SelectionConfig, select
 
 
 @pytest.fixture
@@ -81,3 +85,71 @@ def test_source_id_cannot_shape_the_delimiter(plant):
 def test_metadata_is_never_shown(plant):
     episode = _episode(metadata={"author": "secret-author"})
     assert "secret-author" not in str(build_messages(plant, episode))
+
+
+# -- canonical order -----------------------------------------------------------
+
+KNOWN = [
+    KnownEntity(vertex_type="Machine", key={"serial": "S-7"}, role="subject"),
+    KnownEntity(
+        vertex_type="Person", key={"email": "bob@x.com"}, role="author", label="Bob"
+    ),
+]
+
+
+def _rendered(schema, episode, config=None):
+    """The cast request as the cache keys it: messages and the output shape."""
+    selection = select(
+        schema,
+        episode.text,
+        config,
+        pinned=[entity.vertex_type for entity in episode.known],
+    )
+    messages = build_messages(
+        selection.slice, episode, user_instruction="Prefer serials."
+    )
+    blob = json.dumps(
+        {"messages": messages, "shape": episode_shape(selection.slice)},
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _known_episode(known):
+    return Episode(
+        text="Ann (ann@x.com) restarted press S-7 at 200 kW after the jam; "
+        "WO-12 is open.",
+        source_id="note-1",
+        reference_time=datetime(2024, 3, 4, 9, 15, tzinfo=UTC),
+        context=[
+            ContextItem(source_id="note-0", text="The press jammed again."),
+            ContextItem(source_id="note-00", text="Bob was on shift."),
+        ],
+        known=known,
+    )
+
+
+def test_the_cast_request_bytes_are_pinned():
+    # Recorded casts replay only while these hold: a change here re-records them.
+    plant = load_schema(DATA / "plant.yaml")
+    episode = _known_episode(KNOWN)
+    assert _rendered(plant, episode) == (
+        "a7a2756c092808e8905116bed5df809464de07f854c586be3a3c86cb2126b082"
+    )
+    assert _rendered(plant, episode, SelectionConfig(max_elements=3)) == (
+        "b0997370e640335251828b21cfe7b1d192976f76fcd2319a2b82b9b8ac93ca7d"
+    )
+
+
+def test_known_entities_are_numbered_whatever_their_order():
+    plant = load_schema(DATA / "plant.yaml")
+    forward = _known_episode(KNOWN)
+    backward = _known_episode(KNOWN[::-1])
+    for config in (None, SelectionConfig(max_elements=3)):
+        assert _rendered(plant, forward, config) == _rendered(plant, backward, config)
+    refs = known_refs(backward.known, plant)
+    assert [(ref, e.vertex_type) for ref, e in refs.items()] == [
+        ("k1", "Machine"),
+        ("k2", "Person"),
+    ]

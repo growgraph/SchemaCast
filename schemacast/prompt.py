@@ -76,8 +76,9 @@ def known_refs(known: Sequence[KnownEntity], slice_: Schema) -> dict[str, KnownE
     """The known entities a cast against *slice_* can use, by ref ``k1``….
 
     One is usable when its type is in the slice, the type takes its key from
-    the data, and the key names exactly the type's identity fields. The prompt
-    and validation number them the same way.
+    the data, and the key names exactly the type's identity fields. They are
+    numbered by type, key, role and label, never by the caller's order; the
+    prompt and validation number them the same way.
     """
     config = slice_.core_schema.vertex_config
     usable: list[KnownEntity] = []
@@ -89,6 +90,14 @@ def known_refs(known: Sequence[KnownEntity], slice_: Schema) -> dict[str, KnownE
             contract.identity_fields
         ):
             usable.append(entity)
+    usable.sort(
+        key=lambda e: (
+            e.vertex_type,
+            json.dumps(e.key, sort_keys=True, ensure_ascii=False),
+            e.role,
+            e.label or "",
+        )
+    )
     return {f"k{i}": entity for i, entity in enumerate(usable, start=1)}
 
 

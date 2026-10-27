@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Each cached reply keeps the request it answers beside it (`llm/<key>.request.json`, with the
+  stage and source). A miss under `require_hit` names the nearest stored request of its stage and a
+  diff; `serve` returns them in its 409 body (`miss`).
+
+### Changed
+
+- Pick numbers mentions and candidates in a canonical order (mention ref; candidate best lane, type,
+  key), and casts number known entities and seed pinned types likewise, so the caller's order no
+  longer changes a request or its cache key.
+
 ## [0.3.0]
 
 ### Added

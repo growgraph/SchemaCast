@@ -144,7 +144,11 @@ async def extract(
             raise EpisodeTooLongError(episode.source_id, estimated, max_episode_tokens)
     messages = build_messages(slice_, episode, user_instruction=user_instruction)
     completion = await client.acomplete_json(
-        messages, episode_shape(slice_), schema_name=INSTANCE_SCHEMA_NAME
+        messages,
+        episode_shape(slice_),
+        schema_name=INSTANCE_SCHEMA_NAME,
+        stage="cast",
+        source_id=episode.source_id,
     )
     try:
         wire = WireExtraction.model_validate(completion.data)

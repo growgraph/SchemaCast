@@ -9,7 +9,7 @@ from conftest import DATA
 from fastapi.testclient import TestClient
 from test_cast import ANN, ANN_REPLY, NOTE, NOTE_REPLY
 
-from schemacast.config import SchemaCastSettings, ServeSettings
+from schemacast.config import CacheSettings, SchemaCastSettings, ServeSettings
 from schemacast.serve import create_app
 
 KEY = "s3cret"
@@ -114,6 +114,23 @@ def test_the_batch_is_capped(make_service):
     response = service.post("/cast", json=_body(ANN, NOTE), headers=AUTH)
     assert response.status_code == 413
     assert endpoint.requests == []
+
+
+def test_a_strict_miss_is_a_409_that_says_what_changed(make_service):
+    service, _ = make_service({"m1": [ANN_REPLY]})
+    assert service.post("/cast", json=_body(ANN), headers=AUTH).status_code == 200
+
+    replay, endpoint = make_service(cache=CacheSettings(require_hit=True))
+    changed = ANN.model_copy(update={"text": ANN.text + " Twice."})
+    response = replay.post("/cast", json=_body(changed), headers=AUTH)
+
+    assert response.status_code == 409
+    assert endpoint.requests == []
+    body = response.json()
+    assert "require hits" in body["detail"]
+    miss = body["miss"]
+    assert (miss["stage"], miss["source_id"]) == ("cast", ANN.source_id)
+    assert miss["nearest"] is not None and "+" in miss["diff"]
 
 
 def test_a_mapping_that_is_no_schema_is_refused(make_service):

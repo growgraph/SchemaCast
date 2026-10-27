@@ -64,7 +64,8 @@ entities its metadata names. The
 reply holds `picks` (one per staged mention, in order: `source_id`, `ref`,
 `type`, `outcome`, `candidate`, `detail`), `episodes` and `manifest`. A
 `picked` mention is closed by the caller with `candidate.key`. Statuses as for
-`/cast`; a cache miss under `SCHEMACAST_CACHE_REQUIRE_HIT` is 409.
+`/cast`; a cache miss under `SCHEMACAST_CACHE_REQUIRE_HIT` is 409, with
+`miss` (key, stage, source, nearest stored request, diff) beside `detail`.
 
 ## Authentication
 

@@ -1,5 +1,10 @@
 """Stage A selection: lexical lanes, fusion, the gate, and closure."""
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 from conftest import DATA
 from graflo.architecture.schema.core import CoreSchema
@@ -163,6 +168,40 @@ def test_retrieval_is_deterministic(large):
     first = retrieve(large, text)
     for _ in range(5):
         assert retrieve(large, text) == first
+
+
+def test_pinned_types_seed_in_name_order(large):
+    text = "Ann operates station S-7."
+    config = SelectionConfig(max_elements=3)
+    first = select(large, text, config, pinned=["PLC", "Person", "PLC"])
+    second = select(large, text, config, pinned=["Person", "PLC"])
+    assert first.pinned == second.pinned == ["PLC", "Person"]
+    assert first.slice.to_minimal_canonical_dict() == (
+        second.slice.to_minimal_canonical_dict()
+    )
+
+
+def test_lexical_scores_do_not_depend_on_the_hash_seed():
+    script = (
+        "from conftest import DATA\n"
+        "from schemacast.schema_io import load_schema\n"
+        "from schemacast.select import retrieve\n"
+        "hits, _ = retrieve(load_schema(DATA / 'plant.yaml'), "
+        "'The press station operates; a work order for the sensor tag.')\n"
+        "print([(str(h.seed), h.score.hex()) for h in hits])\n"
+    )
+    runs = {
+        subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=Path(__file__).parent,
+            env={**os.environ, "PYTHONHASHSEED": seed},
+        ).stdout
+        for seed in ("1", "2", "3")
+    }
+    assert len(runs) == 1
 
 
 def test_small_schema_passes_whole(plant):

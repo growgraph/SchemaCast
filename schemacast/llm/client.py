@@ -24,7 +24,14 @@ import openai
 from pydantic import BaseModel, Field
 
 from schemacast.config import LLMSettings, SchemaCastSettings
-from schemacast.llm.cache import CachedResponse, CacheMissError, LLMCache, cache_key
+from schemacast.llm.cache import (
+    CachedResponse,
+    LLMCache,
+    Stage,
+    StoredRequest,
+    cache_request,
+    request_key,
+)
 from schemacast.llm.jsonparse import (
     LLMJsonParseError,
     feedback_excerpt,
@@ -411,25 +418,28 @@ class LLMClient:
         schema_name: str,
         *,
         backoff_attempt: int = 0,
+        stage: Stage | None = None,
+        source_id: str | None = None,
     ) -> tuple[CachedResponse, bool]:
         if not self.settings.model:
             raise LLMConfigurationError("No model: set SCHEMACAST_LLM_MODEL.")
-        key = cache_key(messages, json_schema, self.settings)
+        request = cache_request(messages, json_schema, self.settings)
+        key = request_key(request)
+        stored = StoredRequest(
+            key=key, stage=stage, source_id=source_id, request=request
+        )
         hit = await self.cache.aget(key)
         if hit is not None:
             self._charge(lambda t: t.add_hit(hit.usage))
+            await self.cache.arecord(stored)
             return hit, True
         if self.cache.require_hit:
-            raise CacheMissError(
-                "The cache is set to require hits and this request is not cached "
-                f"({self.cache.dir}). The prompt, the schema or a model setting "
-                "changed since the cache was filled."
-            )
+            raise await self.cache.amiss(stored)
         provider = self._provider()
         if backoff_attempt:
             await asyncio.sleep(_backoff_seconds(backoff_attempt))
         entry = await self._call(provider, messages, json_schema, schema_name)
-        await self.cache.aset(key, entry)
+        await self.cache.aset(key, entry, stored)
         return entry, False
 
     async def acomplete_json(
@@ -438,8 +448,13 @@ class LLMClient:
         json_schema: dict[str, Any],
         *,
         schema_name: str = "instance",
+        stage: Stage | None = None,
+        source_id: str | None = None,
     ) -> JsonCompletion:
         """Ask for one JSON object conforming to *json_schema*.
+
+        *stage* and *source_id* say who asks; they are stored beside the cached
+        response and explain a miss, and never take part in the key.
 
         The reply is parsed, not validated: conformance to the schema is the
         caller's check. A reply that is not a JSON object is re-asked up to
@@ -467,7 +482,12 @@ class LLMClient:
         for attempt in range(attempts):
             try:
                 entry, cached = await self._complete_raw(
-                    conversation, json_schema, schema_name, backoff_attempt=attempt
+                    conversation,
+                    json_schema,
+                    schema_name,
+                    backoff_attempt=attempt,
+                    stage=stage,
+                    source_id=source_id,
                 )
             except LLMRequestTimeoutError:
                 if not timeout_reissue_available:
@@ -475,7 +495,12 @@ class LLMClient:
                 timeout_reissue_available = False
                 logger.warning("Request timed out; re-issuing once")
                 entry, cached = await self._complete_raw(
-                    conversation, json_schema, schema_name, backoff_attempt=1
+                    conversation,
+                    json_schema,
+                    schema_name,
+                    backoff_attempt=1,
+                    stage=stage,
+                    source_id=source_id,
                 )
             if entry.usage is not None:
                 total = total + entry.usage

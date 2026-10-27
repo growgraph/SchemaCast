@@ -356,6 +356,8 @@ class SchemaCaster:
                     repair_messages(messages, current_reply, current.repairable),
                     shape,
                     schema_name=INSTANCE_SCHEMA_NAME,
+                    stage="repair",
+                    source_id=episode.source_id,
                 )
                 requests += completion.attempts
                 wire = WireExtraction.model_validate(completion.data)

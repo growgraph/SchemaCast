@@ -142,8 +142,10 @@ async def test_secondary_identity_mentions_are_looked_up(cast, tmp_path):
     ]
     with ConnectionManager(connection_config=conf) as conn:
         edges = conn.fetch_all_edges("Person", "Machine", "OPERATES")
-    assert len(edges) == 2
-    assert all(edge[0] == {"email": "ann@x.com"} for edge in edges)
+    # Both casts state Ann operates S-7: one edge, however often it is written.
+    assert {json.dumps(edge[:2], sort_keys=True) for edge in edges} == {
+        json.dumps([{"email": "ann@x.com"}, {"serial": "S-7"}], sort_keys=True)
+    }
 
     lines = [json.loads(line) for line in staged_lines(written).splitlines()]
     assert [(line["record"]["ref"], line["reason"]) for line in lines[:1]] == [

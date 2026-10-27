@@ -28,6 +28,7 @@ from typing import Any, Literal
 
 from graflo.link.records import (
     CandidateHit,
+    CandidateLane,
     EntityCandidate,
     PartialRecord,
     RecordGraph,
@@ -53,6 +54,17 @@ PICK_SCHEMA_NAME = "pick"
 NONE = "none"
 
 PickOutcome = Literal["picked", "none", "rejected", "no_candidates", "failed"]
+
+#: Lanes best first, as graflo orders a candidate's lanes; ``metadata`` last.
+LANE_RANK: dict[CandidateLane, int] = {
+    "alternate": 0,
+    "exact": 1,
+    "key": 2,
+    "normalized": 3,
+    "alias": 4,
+    "relation": 5,
+    "metadata": 6,
+}
 
 PREAMBLE = """\
 # TASK
@@ -193,6 +205,7 @@ class _Offer(BaseModel):
     """One staged mention and what it may be, with local ids."""
 
     mid: str
+    position: int = Field(description="Index of the mention in the caller's input.")
     source_id: str
     mention: PartialRecord
     candidates: dict[str, EntityCandidate]
@@ -220,47 +233,88 @@ def _related(
     }
 
 
+def _key_json(key: dict[str, Any]) -> str:
+    return json.dumps(key, sort_keys=True, ensure_ascii=False, default=str)
+
+
+def _best_lane(candidate: EntityCandidate) -> int:
+    return min(LANE_RANK[hit.lane] for hit in candidate.lanes)
+
+
+def _candidate_order(candidate: EntityCandidate) -> tuple[int, str, str]:
+    """Best lane, type, then key: a total order over distinct entities."""
+    return (_best_lane(candidate), candidate.vertex_type, _key_json(candidate.key))
+
+
+def _input_order(candidate: EntityCandidate) -> tuple[int, str, str, str]:
+    return (*_candidate_order(candidate), candidate.model_dump_json())
+
+
+def _canonical(candidate: EntityCandidate) -> EntityCandidate:
+    """*candidate* with its lanes in rank order and its checks by field."""
+    lanes: list[CandidateHit] = []
+    for hit in sorted(
+        candidate.lanes, key=lambda h: (LANE_RANK[h.lane], h.model_dump_json())
+    ):
+        if hit not in lanes:
+            lanes.append(hit)
+    attributes = sorted(
+        candidate.attributes, key=lambda a: (a.field, a.verdict, a.compare)
+    )
+    return candidate.model_copy(update={"lanes": lanes, "attributes": attributes})
+
+
 def offers(item: PickItem) -> list[_Offer]:
     """The staged mentions of *item*, each with its candidates and the type-
     compatible metadata entities, under ids ``m1``… and ``c1``….
 
+    The ids follow a canonical order, never the caller's: mentions by ref,
+    candidates by best lane (metadata after every lookup lane), type and key.
     A metadata entity that is already a candidate adds its lane to that
     candidate. It is not offered to a mention the record graph relates to a
     record stating that entity's key: two related records are two entities.
     """
     out: list[_Offer] = []
     number = 0
-    for index, entry in enumerate(item.staged, start=1):
-        seen: dict[tuple[str, tuple[tuple[str, str], ...]], str] = {}
-        chosen: dict[str, EntityCandidate] = {}
+    staged = sorted(
+        enumerate(item.staged),
+        key=lambda pair: (
+            pair[1].source_id,
+            pair[1].record.ref,
+            pair[1].record.model_dump_json(),
+        ),
+    )
+    metadata = sorted(item.entities, key=_input_order)
+    for index, (position, entry) in enumerate(staged, start=1):
+        merged: dict[tuple[str, tuple[tuple[str, str], ...]], EntityCandidate] = {}
         related = _related(item.graph, entry.record.ref)
-        tagged = [(c, False) for c in entry.candidates] + [
-            (c, True) for c in item.entities
-        ]
+        lookups = sorted(entry.candidates, key=_input_order)
+        tagged = [(c, False) for c in lookups] + [(c, True) for c in metadata]
         for candidate, from_metadata in tagged:
             if candidate.vertex_type != entry.record.type:
                 continue
             identity = (candidate.vertex_type, _frozen(candidate.key))
             if from_metadata and identity in related:
                 continue
-            if identity in seen:
-                if from_metadata:
-                    cid = seen[identity]
-                    held = chosen[cid]
-                    added = [h for h in candidate.lanes if h not in held.lanes]
-                    chosen[cid] = held.model_copy(
-                        update={
-                            "lanes": [*held.lanes, *added],
-                            "label": held.label or candidate.label,
-                        }
-                    )
-                continue
+            held = merged.get(identity)
+            if held is None:
+                merged[identity] = candidate
+            elif from_metadata:
+                added = [h for h in candidate.lanes if h not in held.lanes]
+                merged[identity] = held.model_copy(
+                    update={
+                        "lanes": [*held.lanes, *added],
+                        "label": held.label or candidate.label,
+                    }
+                )
+        chosen: dict[str, EntityCandidate] = {}
+        for candidate in sorted(map(_canonical, merged.values()), key=_candidate_order):
             number += 1
-            seen[identity] = f"c{number}"
             chosen[f"c{number}"] = candidate
         out.append(
             _Offer(
                 mid=f"m{index}",
+                position=position,
                 source_id=entry.source_id,
                 mention=entry.record,
                 candidates=chosen,
@@ -359,7 +413,9 @@ def _mentions_block(asked: list[_Offer], graph: RecordGraph | None) -> str:
 def pick_messages(
     item: PickItem, asked: list[_Offer], *, user_instruction: str | None = None
 ) -> list[ChatMessage]:
-    """The two messages of one pick request; the same input gives the same bytes.
+    """The two messages of one pick request. The same input gives the same
+    bytes, in whatever order the caller listed its mentions and candidates
+    (:func:`offers` numbers them canonically).
 
     Mentions and candidates name graph content, so they sit in a data block
     like the text.
@@ -440,7 +496,8 @@ async def pick_episode(
         )
 
     if not asked:
-        return [_pick(o, "no_candidates") for o in offered], PickEpisodeResult(
+        inputs = sorted(offered, key=lambda o: o.position)
+        return [_pick(o, "no_candidates") for o in inputs], PickEpisodeResult(
             source_id=source_id, status="skipped", mentions=len(offered)
         )
     messages = pick_messages(item, asked, user_instruction=user_instruction)
@@ -448,7 +505,11 @@ async def pick_episode(
     requests = 1
     try:
         completion = await client.acomplete_json(
-            messages, pick_shape(asked), schema_name=PICK_SCHEMA_NAME
+            messages,
+            pick_shape(asked),
+            schema_name=PICK_SCHEMA_NAME,
+            stage="pick",
+            source_id=source_id,
         )
         requests = completion.attempts
         reply = _WireReply.model_validate(completion.data)
@@ -470,7 +531,10 @@ async def pick_episode(
             by_mid[offer.mid] = _pick(
                 offer, outcome, candidate=candidate, detail=detail
             )
-    ordered = [by_mid.get(o.mid) or _pick(o, "no_candidates") for o in offered]
+    ordered = [
+        by_mid.get(o.mid) or _pick(o, "no_candidates")
+        for o in sorted(offered, key=lambda o: o.position)
+    ]
     return ordered, PickEpisodeResult(
         source_id=source_id,
         status="failed" if failure else "ok",

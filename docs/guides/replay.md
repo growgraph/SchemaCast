@@ -21,6 +21,11 @@ A miss means the request changed: the prompt, the schema slice or a model
 setting. An episode quarantined as `provider_error` has no cached reply, so its
 replay misses too; cast it again without `--replay` to fill the cache.
 
+Each reply, `llm/<key>.json` in the cache directory, has its request beside it
+in `llm/<key>.request.json`: what was hashed, plus the stage (`cast`, `repair`,
+`pick`) and the episode that asked. A miss names the nearest stored request of
+its stage, of the same episode when there is one, with a diff of what changed.
+
 ## Settings
 
 | Variable | Effect |
