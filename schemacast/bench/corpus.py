@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
+from graflo.architecture.schema.compare import MatchLevel
 from graflo.architecture.schema.document import Schema
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -43,7 +44,7 @@ SPLITS_FILE = CASES_DIR / "SPLITS.yaml"
 
 #: Bump whenever a case, schema or split assignment changes. Results from
 #: different versions are not comparable.
-CORPUS_VERSION = "1.4.0"
+CORPUS_VERSION = "1.5.0"
 
 #: Content hash of ``cases/`` and ``schemas/`` at :data:`CORPUS_VERSION`.
 CORPUS_DIGEST = "eb9c58e3938dd94fd4fd8196684dec08861686fd85ca3ee0389b32a24d9d67ee"
@@ -169,6 +170,8 @@ class ExpectedHit(BaseModel):
     relation: str | None = None
     anchor: str | None = None
     role: str | None = None
+    targets: int | None = None
+    level: MatchLevel | None = None
 
 
 class ExpectedAttribute(BaseModel):
@@ -178,8 +181,8 @@ class ExpectedAttribute(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     field: str
-    verdict: str
-    compare: str = "literal"
+    level: MatchLevel
+    exclusive: bool = False
 
 
 class ExpectedCandidate(BaseModel):

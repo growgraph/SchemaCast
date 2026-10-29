@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pick numbers mentions and candidates in a canonical order (mention ref; candidate best lane, type,
   key), and casts number known entities and seed pinned types likewise, so the caller's order no
   longer changes a request or its cache key.
+- Pick shows graflo's graded attributes (`matches`, `fits`, `differs`, `conflicts`, `unknown`) and
+  the `compatible` and `context` lanes; only a conflict is evidence against a candidate. Every pick
+  request changes. Bench corpus 1.5.0: expected attributes are `{field, level, exclusive}`.
 
 ## [0.3.0]
 

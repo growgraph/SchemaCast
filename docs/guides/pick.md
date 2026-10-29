@@ -19,9 +19,10 @@ Entities the record's metadata names (its speaker, its thread) are passed as
 already a candidate adds its `metadata` lane to that candidate.
 
 Each candidate is shown with every way it was found (its `lanes`, best first)
-and, when graflo checked them, the mention's stated properties against the
-entity: `agrees`, `contradicts`, or `unknown` when the entity holds nothing to
-compare. A contradiction is evidence against the candidate, not a bar; the
+and, when graflo graded them, the mention's stated properties against the
+entity: `matches`, `fits` (one is a less specific form of the other),
+`differs`, `conflicts`, or `unknown` when the entity holds nothing to compare.
+Only a conflict is evidence against the candidate, and it is not a bar; the
 model weighs it, and the check below ignores it.
 
 The answer is checked without a model: the candidate must be one listed for
@@ -56,7 +57,7 @@ Each line of `pick.jsonl` is one episode:
               "candidates": [{"vertex_type": "Customer", "key": {"account": "ACC-31"},
                               "label": "Jo Andersson",
                               "lanes": [{"lane": "relation", "relation": "RAISED", "anchor": "t"}],
-                              "attributes": [{"field": "email", "verdict": "unknown", "compare": "literal"}]}]}],
+                              "attributes": [{"field": "email", "level": "unknown", "exclusive": true}]}]}],
   "entities": [{"vertex_type": "Agent", "key": {"handle": "kim"},
                 "lanes": [{"lane": "metadata", "role": "speaker"}]}],
   "graph": {…}

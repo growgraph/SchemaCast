@@ -240,6 +240,8 @@ def pick_item(
                     if hit.anchor
                     else None,
                     role=hit.role,
+                    targets=hit.targets,
+                    level=hit.level,
                 )
                 for hit in item.lanes
             ],

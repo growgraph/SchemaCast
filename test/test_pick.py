@@ -247,8 +247,8 @@ ALEX = EntityCandidate(
         CandidateHit(lane="exact", matched="Alex Berg"),
     ],
     attributes=[
-        AttributeCheck(field="name", verdict="agree", compare="literal"),
-        AttributeCheck(field="email", verdict="unknown", compare="literal"),
+        AttributeCheck(field="name", level="exact", exclusive=False),
+        AttributeCheck(field="email", level="unknown", exclusive=True),
     ],
 )
 SAM = EntityCandidate(
@@ -388,24 +388,28 @@ def test_one_lane_and_no_attributes_render_as_one_way_found():
     ]
 
 
-def test_every_lane_and_the_attribute_verdicts_are_shown():
+def test_every_lane_and_the_attribute_levels_are_shown():
     jo = JO_BY_NAME.model_copy(
         update={
-            "lanes": [*JO_BY_NAME.lanes, *JO.lanes],
+            "lanes": [
+                *JO_BY_NAME.lanes,
+                *JO.lanes,
+                CandidateHit(lane="context", role="subject", level="unknown"),
+            ],
             "attributes": [
-                AttributeCheck(field="name", verdict="agree", compare="literal"),
-                AttributeCheck(field="email", verdict="contradict", compare="literal"),
-                AttributeCheck(
-                    field="name_norm", verdict="unknown", compare="normalized"
-                ),
+                AttributeCheck(field="name", level="exact", exclusive=False),
+                AttributeCheck(field="email", level="conflict", exclusive=True),
+                AttributeCheck(field="site", level="compatible", exclusive=False),
+                AttributeCheck(field="title", level="differs", exclusive=False),
             ],
         }
     )
     (line,) = _mentions(_item(jo, graph=_graph()))
     assert line == (
         '  c1: "Jo Andersson" (Customer; account="ACC-31"); found by exact: '
-        '"Jo Andersson", relation: linked by RAISED to "HD-4411"; stated email '
-        "contradicts, name agrees, name_norm unknown (normalized)"
+        '"Jo Andersson", relation: linked by RAISED to "HD-4411", context: linked '
+        "to the record's subject; stated email conflicts, name matches, site fits, "
+        "title differs"
     )
 
 
@@ -421,7 +425,7 @@ def test_the_check_ignores_evidence_against_a_candidate(make_client):
     against = JO.model_copy(
         update={
             "attributes": [
-                AttributeCheck(field="email", verdict="contradict", compare="literal")
+                AttributeCheck(field="email", level="conflict", exclusive=True)
             ]
         }
     )
