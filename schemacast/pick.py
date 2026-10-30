@@ -50,8 +50,10 @@ from schemacast.prompt import DATA_SENTENCE, _block
 
 #: JSON Schema name sent with strict output requests.
 PICK_SCHEMA_NAME = "pick"
-#: The answer for "no candidate is this entity".
+#: The answer for "no candidate is this entity"; offered for every mention.
 NONE = "none"
+#: The most candidates offered for one mention, the first in canonical order.
+MAX_OFFERED = 4
 
 PickOutcome = Literal["picked", "none", "rejected", "no_candidates", "failed"]
 
@@ -78,7 +80,8 @@ RULES = """\
 # RULES
 
 - Answer once for every mention, with an id listed under that mention or
-  `none`.
+  `none`. At most four candidates are listed, the best found first; when the
+  entity the mention names is not among them, answer `none`.
 - Choose a candidate only when the text, read with the candidate's label and
   how it was found, makes it the entity the mention names. When the text fits
   several candidates, or none, answer `none`: a wrong link is worse than none.
@@ -275,6 +278,7 @@ def offers(item: PickItem) -> list[_Offer]:
 
     The ids follow a canonical order, never the caller's: mentions by ref,
     candidates by best lane (metadata after every lookup lane), type and key.
+    A mention is offered its first :data:`MAX_OFFERED` candidates in that order.
     A metadata entity that is already a candidate adds its lane to that
     candidate. It is not offered to a mention the record graph relates to a
     record stating that entity's key: two related records are two entities.
@@ -313,7 +317,8 @@ def offers(item: PickItem) -> list[_Offer]:
                     }
                 )
         chosen: dict[str, EntityCandidate] = {}
-        for candidate in sorted(map(_canonical, merged.values()), key=_candidate_order):
+        ranked = sorted(map(_canonical, merged.values()), key=_candidate_order)
+        for candidate in ranked[:MAX_OFFERED]:
             number += 1
             chosen[f"c{number}"] = candidate
         out.append(

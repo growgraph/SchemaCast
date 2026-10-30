@@ -18,6 +18,9 @@ Entities the record's metadata names (its speaker, its thread) are passed as
 `entities` and offered to every staged mention of their type. One that is
 already a candidate adds its `metadata` lane to that candidate.
 
+A mention is offered at most four candidates, the first in canonical order
+(best lane first); `none` is always offered.
+
 Each candidate is shown with every way it was found (its `lanes`, best first)
 and, when graflo graded them, the mention's stated properties against the
 entity: `matches`, `fits` (one is a less specific form of the other),

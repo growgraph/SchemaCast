@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pick shows graflo's graded attributes (`matches`, `fits`, `differs`, `conflicts`, `unknown`) and
   the `compatible` and `context` lanes; only a conflict is evidence against a candidate. Every pick
   request changes. Bench corpus 1.5.0: expected attributes are `{field, level, exclusive}`.
+- Pick offers a mention at most four candidates (`MAX_OFFERED`), the first in canonical order;
+  `none` is always offered. Every pick request changes.
 
 ## [0.3.0]
 

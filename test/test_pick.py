@@ -36,6 +36,7 @@ from schemacast.ground import TextSpan, evidence, quote_of
 from schemacast.llm.cache import CacheMissError, cache_key
 from schemacast.pick import (
     LANE_RANK,
+    MAX_OFFERED,
     NONE,
     PICK_SCHEMA_NAME,
     Picker,
@@ -342,6 +343,35 @@ def test_mentions_follow_their_ref_and_candidates_their_best_lane():
         "email",
         "name",
     ]
+
+
+def test_a_mention_is_offered_its_best_four_candidates_and_none():
+    hits = [
+        CandidateHit(lane="context", anchor="t", level="exact"),
+        CandidateHit(lane="metadata", role="speaker"),
+        CandidateHit(lane="relation", relation="RAISED", anchor="t"),
+        CandidateHit(lane="exact", matched="Jo"),
+        CandidateHit(lane="normalized", matched="Jo"),
+        CandidateHit(lane="key", matched="Jo"),
+    ]
+    many = [
+        EntityCandidate(
+            vertex_type="Customer", key={"account": f"ACC-{i}"}, lanes=[hit]
+        )
+        for i, hit in enumerate(hits)
+    ]
+    [offer] = offers(_item(*many))
+    assert len(offer.candidates) == MAX_OFFERED == 4
+    assert [c.lanes[0].lane for c in offer.candidates.values()] == [
+        "exact",
+        "key",
+        "normalized",
+        "relation",
+    ]
+    enum = pick_shape([offer])["properties"]["picks"]["items"]["properties"][
+        "candidate"
+    ]["enum"]
+    assert enum == [*offer.candidates, NONE]
 
 
 def test_picks_keep_the_callers_order(make_client):
