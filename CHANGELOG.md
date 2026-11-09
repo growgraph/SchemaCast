@@ -7,46 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- Each cached reply keeps the request it answers beside it (`llm/<key>.request.json`, with the
-  stage and source). A miss under `require_hit` names the nearest stored request of its stage and a
-  diff; `serve` returns them in its 409 body (`miss`).
-
-### Changed
-
-- Pick numbers mentions and candidates in a canonical order (mention ref; candidate best lane, type,
-  key), and casts number known entities and seed pinned types likewise, so the caller's order no
-  longer changes a request or its cache key.
-- Pick shows graflo's graded attributes (`matches`, `fits`, `differs`, `conflicts`, `unknown`) and
-  the `compatible` and `context` lanes; only a conflict is evidence against a candidate. Every pick
-  request changes. Bench corpus 1.5.0: expected attributes are `{field, level, exclusive}`.
-- Pick offers a mention at most four candidates (`MAX_OFFERED`), the first in canonical order;
-  `none` is always offered. Every pick request changes.
-
-## [0.3.0]
+## [0.4.0]
 
 ### Added
 
-- **`keys_apart` finding:** a vertex's complete keys must be stated in one sentence. A key a
-  sentence apart from the first is removed after a repair that asks for two vertices, so one record
-  never claims two entities are one.
 - **`pick`**: links an episode's staged mentions to the candidates graflo gathers
   (`gather_candidates`) and to the entities its metadata names, in one call: per mention, a
   candidate id from an enum or `none`, checked without a model. `schemacast pick`, `POST /pick`,
   `Picker`, `apply_picks` (a pick links, never writes); cached and replayable like the cast.
-  Each candidate is shown with every lane that found it and graflo's attribute verdicts
-  (`agrees`, `contradicts`, `unknown`); a metadata entity that is already a candidate adds its
-  lane. Needs graflo 1.24.0 (`EntityCandidate.lanes`, `attributes`).
-- Bench corpus 1.4.0: `pick.yaml` candidates carry `lanes` and `attributes`, as graflo's
-  `EntityCandidate` does.
+  Each candidate is shown with every lane that found it (including `compatible` and `context`)
+  and graflo's graded attributes (`matches`, `fits`, `differs`, `conflicts`, `unknown`); only a
+  conflict is evidence against a candidate. A mention is offered at most four candidates
+  (`MAX_OFFERED`) plus `none`. Mentions and candidates are numbered in a canonical order, so the
+  caller's order never changes a request or its cache key.
 - **Known entities**: `Episode.known` (`KnownEntity`: `vertex_type`, `key`, `role`, `label`) names
   records the text belongs to. Their types are pinned into the slice, they are shown in a `# KNOWN`
   block as refs `k1`…, and an edge may end at one; restating one is a `known_ref` finding. A used
-  one is a record (`Validation.known`) stating its key from the source, with no grounding.
-- Bench corpus 1.3.0: the `known` family; edges in `expected.yaml` may end at `k1`….
-- Bench corpus 1.2.0: `pick.yaml` in the `mention` family, scored as *Pick* (correct, wrong links,
-  rejected).
+  one is a record (`Validation.known`) stating its key from the source, with no grounding. Known
+  entities and pinned types are numbered in a canonical order.
+- **`keys_apart` finding:** a vertex's complete keys must be stated in one sentence. A key a
+  sentence apart from the first is removed after a repair that asks for two vertices, so one record
+  never claims two entities are one.
+- Each cached reply keeps the request it answers beside it (`llm/<key>.request.json`, with the
+  stage and source). A miss under `require_hit` names the nearest stored request of its stage and a
+  diff; `serve` returns them in its 409 body (`miss`).
+- Bench corpus 1.5.0: the `known` family (edges in `expected.yaml` may end at `k1`…); `pick.yaml`
+  in the `mention` family, scored as *Pick* (correct, wrong links, rejected), its candidates
+  carrying `lanes` and `attributes` and its expected attributes `{field, level, exclusive}`.
 - `schemacast-bench --corpus DIR` runs a corpus of your own (never publishable);
   `schemacast-bench score CASTS…` scores saved `POST /cast` bodies with no model. Reports list
   every unmatched expected and produced item per episode; `expected.yaml` takes `allowed` items.
@@ -56,7 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Requires graflo ≥ 1.21.0: mention graphs, resolution and candidates come from `graflo.link`.
+- Requires graflo ≥ 1.25.0: mention graphs, resolution, candidates and graded attributes come from
+  `graflo.link`.
 - **A cast is a mention graph.** Each episode yields its mentions (type, stated properties,
   spans), the relations between them and `unmapped`; graflo resolves them by keys
   (`resolve_mentions`): a complete primary key, or a secondary identity matching one entity in the
@@ -81,6 +69,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The prompt labels the reference time as not part of the text and says every quote comes from
   inside a delimited block; an `unmapped` entry whose quote is not in the text is dropped.
 - `examples/tickets`: `title` and `wait` carry descriptions.
+
+## [0.3.0] - 2026-10-18
+
+### Changed
+
 - **Renamed from `lpgcast` to `schemacast`**: the distribution, the import package, the CLI
   (`schemacast`, `schemacast-bench`), `SchemaCaster` and `SchemaCastSettings`, the
   `SCHEMACAST_` environment prefixes and the default cache directory. The `text2lpg` alias is gone.

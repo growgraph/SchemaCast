@@ -579,7 +579,7 @@ wheels = [
 
 [[package]]
 name = "graflo"
-version = "1.25.0"
+version = "1.26.0"
 source = { editable = "../graflo" }
 dependencies = [
     { name = "boto3" },
@@ -615,7 +615,9 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.35.0,<2" },
     { name = "click", specifier = ">=8.2.0,<9" },
     { name = "confluent-kafka", specifier = ">=2.6.0" },
+    { name = "duckdb", marker = "extra == 'bulk'", specifier = ">=1.1" },
     { name = "falkordb", specifier = ">=1.0.9" },
+    { name = "graflo", extras = ["bulk"], marker = "extra == 'dev'" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.140.0" },
     { name = "ijson", specifier = ">=3.2.3,<4" },
     { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.23.0" },
@@ -654,8 +656,9 @@ requires-dist = [
     { name = "urllib3", specifier = ">=2.0.0" },
     { name = "wasi-graphviz", extras = ["wasmtime"], marker = "extra == 'plot'", specifier = ">=0.1.4,<0.2" },
     { name = "xmltodict", specifier = ">=0.14.2,<0.15" },
+    { name = "zstandard", marker = "extra == 'bulk'", specifier = ">=0.23" },
 ]
-provides-extras = ["dev", "docs", "plot"]
+provides-extras = ["bulk", "dev", "docs", "plot"]
 
 [[package]]
 name = "griffelib"
@@ -2752,7 +2755,7 @@ wheels = [
 
 [[package]]
 name = "schemacast"
-version = "0.3.0"
+version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
