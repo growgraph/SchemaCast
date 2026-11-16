@@ -132,8 +132,9 @@ async def test_secondary_identity_mentions_are_looked_up(cast, tmp_path):
     await write_cast(await cast([ANN], {"m1": [ANN_REPLY]}), conf)
 
     result = await cast([CALL], {"m2": [CALL_REPLY]})
-    # Without the database, neither phone number identifies anyone.
-    assert [s.record.ref for s in result.resolution.staged.records] == ["p", "q"]
+    # Without the database, neither phone number identifies anyone, and the
+    # press is only mentioned: the first cast defined it.
+    assert [s.record.ref for s in result.resolution.staged.records] == ["p", "q", "m"]
     written, _ = await write_cast(result, conf)
 
     assert written.identity_of("m2", "p") == {"email": "ann@x.com"}

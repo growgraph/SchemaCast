@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Only a text that introduces an entity creates it: a mention with a complete key links to an
+  entity another text or the database holds, and otherwise stays staged as `unmatched`. Needs
+  graflo 1.27.1.
+
 ## [0.4.0]
 
 ### Added

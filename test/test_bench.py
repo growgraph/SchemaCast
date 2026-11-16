@@ -254,8 +254,8 @@ async def test_a_re_cast_that_renames_a_ref_duplicates_an_assigned_vertex(make_c
     one, _ = await _cast_one(case, source_id, client_a)
     two, _ = await _cast_one(case, source_id, client_b)
     counts = score_recast(one, two, case.schema_)
-    # The mentioned machine is written by its key, so the re-cast adds nothing.
-    assert counts.recast_vertices == 3
+    # The mentioned machine is a reference: no store holds it from these casts.
+    assert counts.recast_vertices == 2
     assert counts.recast_added == 0
     assert counts.recast_minted == 1
     assert counts.recast_duplicated == 1

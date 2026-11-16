@@ -134,8 +134,9 @@ def test_minted_keys_are_stable_and_scoped_to_the_episode(plant):
     assert _resolve(plant, source_id="msg-2").identity_of("msg-2", "n1") != first
 
 
-def test_a_mention_with_a_key_keeps_what_the_text_states(plant):
-    # Ann is referred to, not introduced, but the text states her key and name.
+def test_a_mention_with_a_key_waits_with_what_the_text_states(plant):
+    # Ann is referred to, not introduced: nothing defines her, so nothing is
+    # written, and what the text states of her waits with the staged mention.
     reply = {
         "vertices": [
             _v(
@@ -149,9 +150,10 @@ def test_a_mention_with_a_key_keeps_what_the_text_states(plant):
         "edges": [],
     }
     resolution = _resolve(plant, reply)
-    assert promote(plant, resolution).vertices["Person"] == [
-        {"email": "ann@x.com", "name": "Ann"}
-    ]
+    assert promote(plant, resolution).vertices == {}
+    (staged,) = resolution.staged.records
+    assert staged.reason == "unmatched"
+    assert staged.record.values() == {"email": "ann@x.com", "name": "Ann"}
 
 
 def test_an_entity_named_by_an_alternate_key_needs_no_repair(plant):

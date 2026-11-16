@@ -97,7 +97,7 @@ correction, at most twice.
 
 A text's mentions are resolved by their keys, never guessed: a complete key
 identifies an entity, an alternate key looks one up, and anything less waits,
-staged with its reason. Writing a cast twice leaves a database that upserts
+staged with its reason. Only a text that introduces an entity creates it. Writing a cast twice leaves a database that upserts
 unchanged.
 
 </div>
