@@ -2,7 +2,8 @@
 
 Per episode: select a slice → one extraction call → validate → at most two
 typed repairs → quarantine what still fails → a record graph (graflo
-``RecordGraph``, quotes and spans in ``evidence``). The batch's record graphs
+``RecordGraph``, quotes, spans and qualifiers in ``evidence``), without what
+the text denies; denials are grounded only. The batch's record graphs
 are then resolved by graflo, without a model and without a
 database: what their keys identify becomes ``output``, the rest is staged. A
 write resolves them again against the database (``schemacast.write``).
@@ -65,7 +66,7 @@ from schemacast.sink import MemoryQuarantineSink, QuarantineRecord, QuarantineSi
 from schemacast.validate import Finding, Fix, Validation, validate
 
 #: Version of the files a cast writes; bumped when a record's meaning changes.
-OUTPUT_FORMAT_VERSION = 6
+OUTPUT_FORMAT_VERSION = 7
 
 #: Repair requests after the first reply, at most.
 MAX_REPAIRS = 2
@@ -385,6 +386,9 @@ class SchemaCaster:
         known.update(requests=requests, repairs=repairs, repair_failure=repair_failure)
         quarantine = self._records(episode, best, best_reply, requests)
         # The slice's ref, which keys minted for keyless entities depend on.
+        statements = best.statements(
+            episode.source_id, schema_ref(slice_), episode.reference_time
+        )
         graph = best.graph(
             episode.source_id, schema_ref(slice_), episode.reference_time
         )
@@ -410,7 +414,10 @@ class SchemaCaster:
             validation=best,
             graph=graph,
             groundings=groundings(
-                graph, episode, extractor=_extractor(), model=self.client.settings.model
+                statements,
+                episode,
+                extractor=_extractor(),
+                model=self.client.settings.model,
             ),
             quarantine=quarantine,
         )

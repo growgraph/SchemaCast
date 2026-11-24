@@ -223,3 +223,6 @@ __marimo__/
 bench-results/
 
 .idea/
+
+# Output of the examples and of `schemacast cast --out out/...`
+/out/

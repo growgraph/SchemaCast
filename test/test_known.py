@@ -248,7 +248,7 @@ async def test_a_cast_relates_to_a_known_entity_without_grounding_it(
     assert "# KNOWN" in endpoint.requests[0]["messages"][1]["content"]
     (episode,) = result.episodes
     assert (episode.mentions, episode.relations, episode.known) == (1, 1, 1)
-    assert result.manifest.output_format_version == OUTPUT_FORMAT_VERSION == 6
+    assert result.manifest.output_format_version == OUTPUT_FORMAT_VERSION == 7
     assert {g.ref for g in result.groundings if g.ref} == {"v1"}
     assert all(g.target_ref == "k1" for g in result.groundings if g.kind == "edge")
     # The known machine is a reference: the relation waits for it, nothing

@@ -23,7 +23,7 @@ no prices ship with the package.
 `schemacast/bench/cases/<family>/<instance>/` holds `case.yaml` (description, schema, and optionally `recast: true`
 or pinned `settings`), `episodes.jsonl` and `expected.yaml`. Schemas live in `schemacast/bench/schemas/`; a case
 naming several merges their vertices and edges. Each family isolates one failure mode, in four
-domains (`known` in two):
+domains (`known` and `qualifiers` in two):
 
 | Family | What it isolates |
 |---|---|
@@ -37,13 +37,15 @@ domains (`known` in two):
 | `selection` | a wide schema sliced under a budget, its types named in inflected forms (`parcels`, `shipped`) and related to each other |
 | `context` | a key stated only in an earlier text of the thread (`Episode.context`); everything else in the text itself |
 | `known` | a text about a record it never names (`Episode.known`): edges to its ref `k1`…, a restated record that must not be written, entities that cannot be shown; one instance in each half |
+| `qualifiers` | a denied relation, a planned date and a time relative to the reference time; one instance in each half |
 
 `expected.yaml` maps each episode to `vertices` (keyed by a handle), `edges` between handles,
 `forbidden` items a cast must not write, and `allowed` items a cast may write without being
 required to (an entity the text implies): a produced item matching an `allowed` one counts
 neither as matched nor as produced. `forbidden` and `allowed` edges may use the expected
 handles; `allowed` handles must differ from them. An edge may end at a known entity by its ref
-(`k1`…), which matches by ref and counts as no entity. An optional `pick.yaml` gives, for an episode's staged
+(`k1`…), which matches by ref and counts as no entity. An edge or property may carry `when`
+(`quote`, `start`, `end`, `granularity`), `modality` and `negated`, as the reply does. An optional `pick.yaml` gives, for an episode's staged
 mentions (by handle), the candidates a resolver would gather, the entities the record names, and
 the expected `pick` (a key, or null when none fits). Candidates and entities are written as graflo's
 `EntityCandidate`: `type`, `key`, `label`, `lanes` (each a `lane` with its own fields; a relation's
@@ -52,7 +54,7 @@ name the `context` item its quote is in, for an identity value only) and every v
 its field makes of it; a test checks both, and that the oracle scores perfectly on the whole
 schema.
 
-`SPLITS.yaml` puts two instances of each family in `dev` and two in `test` (`known`: one in each). Tune against `dev`;
+`SPLITS.yaml` puts two instances of each family in `dev` and two in `test` (`known`, `qualifiers`: one in each). Tune against `dev`;
 only `--split test` on an unmodified corpus is publishable, and a report says when it is not.
 `CORPUS_VERSION` identifies the corpus and `CORPUS_DIGEST` pins it: change a case, a schema or the
 split and bump the version, or the test suite fails. Results from different versions are not
@@ -96,6 +98,7 @@ Every metric is a ratio of counts pooled over episodes.
 | Entity, edge, property P/R/F1 | matched over produced and over expected; properties on matched entities and edges only |
 | Direction | edges matched, over edges matched or found the wrong way round |
 | Span | matched items whose quote overlaps the expected one |
+| Qualifiers | matched edges and properties where either side is qualified, whose modality, negation and `when` start and end agree (a date by day) |
 | Mention | matched entities whose `mention` flag agrees |
 | Forbidden | forbidden vertices resolution would write, and forbidden edges produced |
 | Seed / closure recall | expected types among the seeds and in the slice, read on sliced episodes only |

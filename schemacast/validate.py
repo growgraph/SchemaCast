@@ -24,6 +24,14 @@ Kept mentions and relations are graflo records (``PartialRecord``,
 ``RecordRelation``); each one's quote and span, and each property's, are its
 ``evidence`` (:func:`schemacast.ground.evidence`).
 
+An edge's or property's qualifiers are checked like its quote: the ``when``
+quote must be in the text, ``start`` and ``end`` ISO 8601 dates or date-times
+with ``start`` not after ``end``, the granularity and the modality from their
+lists, and a key property is never denied. A bad qualifier removes the item it
+qualifies (``invalid_qualifier``, or ``quote_not_found`` with detail ``when``).
+Denied items stay in :meth:`Validation.statements` and leave
+:meth:`Validation.graph`.
+
 An episode's known entities are refs ``k1``… (:func:`schemacast.prompt.known_refs`)
 an edge may end at. A vertex the reply gives such a ref is a ``known_ref``
 finding. Each known entity a kept relation uses becomes a record in
@@ -59,9 +67,21 @@ from graflo.link.records import (
 from pydantic import BaseModel, Field
 
 from schemacast.episode import ContextItem, KnownEntity
-from schemacast.extract import WireExtraction, WireProp
+from schemacast.extract import WireExtraction, WireProp, WireQualified
 from schemacast.fidelity import value_mismatch
-from schemacast.ground import Span, UnmappedText, evidence, locate, span_of
+from schemacast.ground import (
+    GRANULARITIES,
+    MODALITIES,
+    Span,
+    StatedTime,
+    UnmappedText,
+    affirmed,
+    evidence,
+    locate,
+    not_after,
+    parse_iso,
+    span_of,
+)
 from schemacast.prompt import known_refs
 
 FindingKind = Literal[
@@ -72,6 +92,7 @@ FindingKind = Literal[
     "duplicate_property",
     "coercion",
     "value_not_in_quote",
+    "invalid_qualifier",
     "quote_not_found",
     "identity_insufficient",
     "keys_apart",
@@ -92,6 +113,7 @@ FINDING_ORDER: tuple[FindingKind, ...] = (
     "duplicate_property",
     "coercion",
     "value_not_in_quote",
+    "invalid_qualifier",
     "quote_not_found",
     "endpoint_invalid",
 )
@@ -172,10 +194,10 @@ class Validation(BaseModel):
             + sum(len(r.props) for r in self.relations)
         )
 
-    def graph(
+    def statements(
         self, source_id: str, schema_ref: str, reference_time: Any = None
     ) -> RecordGraph:
-        """The record graph this reply states; ``unmapped`` stays here."""
+        """Every statement of this reply, denials included; what is grounded."""
         return RecordGraph(
             source_id=source_id,
             schema_ref=schema_ref,
@@ -183,6 +205,13 @@ class Validation(BaseModel):
             records=[*self.mentions, *self.known],
             relations=self.relations,
         )
+
+    def graph(
+        self, source_id: str, schema_ref: str, reference_time: Any = None
+    ) -> RecordGraph:
+        """The record graph this reply states, without what the text denies:
+        what is resolved and written. ``unmapped`` stays here."""
+        return affirmed(self.statements(source_id, schema_ref, reference_time))
 
 
 #: Where one sentence ends and the next starts: a full stop, question or
@@ -279,6 +308,74 @@ class _Checker:
                 return span.model_copy(update={"context": source_id})
         return None
 
+    def qualifiers(
+        self,
+        item: WireQualified,
+        path: str,
+        common: dict[str, Any],
+        *,
+        near: Span | None = None,
+        key: bool = False,
+    ) -> dict[str, Any] | None:
+        """The checked qualifiers of *item* as :func:`evidence` arguments, or
+        None after a finding."""
+
+        def bad(detail: str, message: str) -> None:
+            self.find(
+                kind="invalid_qualifier", detail=detail, message=message, **common
+            )
+
+        modality = item.modality or "actual"
+        if modality not in MODALITIES:
+            bad(
+                "modality",
+                f"modality {modality!r} is not one of {', '.join(MODALITIES)}.",
+            )
+            return None
+        negated = bool(item.negated)
+        if negated and key:
+            bad("negated_key", "A key property is never negated.")
+            return None
+        found: dict[str, Any] = {"modality": modality, "negated": negated}
+        when = item.when
+        if when is None:
+            return found
+        if when.granularity not in GRANULARITIES:
+            bad(
+                "granularity",
+                f"granularity {when.granularity!r} is not one of "
+                f"{', '.join(GRANULARITIES)}.",
+            )
+            return None
+        start = parse_iso(when.start) if when.start is not None else None
+        end = parse_iso(when.end) if when.end is not None else None
+        if start is None or (when.end is not None and end is None):
+            wrong = when.start if start is None else when.end
+            bad("not_iso", f"{wrong!r} is not an ISO 8601 date or date-time.")
+            return None
+        if end is not None and not not_after(start, end):
+            bad("start_after_end", f"start {when.start!r} is after end {when.end!r}.")
+            return None
+        span = self.span(when.quote, f"{path}.when", near=near)
+        if span is None:
+            self.find(
+                kind="quote_not_found",
+                detail="when",
+                message=f"The time quote {when.quote!r} is not in the text.",
+                **common,
+            )
+            return None
+        found["when"] = StatedTime.model_validate(
+            {
+                "quote": when.quote,
+                "span": span,
+                "start": start.isoformat(),
+                "end": end.isoformat() if end is not None else None,
+                "granularity": when.granularity,
+            }
+        )
+        return found
+
     def props(
         self,
         wire_props: list[WireProp],
@@ -336,10 +433,15 @@ class _Checker:
             if mismatch is not None:
                 self.find(kind="value_not_in_quote", message=mismatch, **common)
                 continue
+            qualified = self.qualifiers(
+                prop, prop_path, common, near=span, key=prop.name in keys
+            )
+            if qualified is None:
+                continue
             if value != prop.value:
                 self.fix("coerced", prop_path, f"{prop.value!r} -> {value!r}")
             stated[prop.name] = StatedProp(
-                value=value, evidence=evidence(prop.quote, span)
+                value=value, evidence=evidence(prop.quote, span, **qualified)
             )
         return stated
 
@@ -507,13 +609,16 @@ class _Checker:
                     **common,
                 )
                 continue
+            qualified = self.qualifiers(we, path, common, near=span)
+            if qualified is None:
+                continue
             self.result.relations.append(
                 RecordRelation(
                     edge_id=edge.edge_id,
                     source=source_ref,
                     target=target_ref,
                     props=props,
-                    evidence=evidence(we.quote, span),
+                    evidence=evidence(we.quote, span, **qualified),
                 )
             )
 

@@ -5,6 +5,10 @@ in YAML or JSON. Anything graflo accepts works; a few things decide how well a
 model reads it. Check the result with `schemacast sheet --schema schema.yaml`:
 that is everything the model sees.
 
+To start without learning graflo's format, write the schema in the
+[compact notation](#the-compact-notation) below; it is read as the graflo
+schema it stands for.
+
 ## Describe types in the reader's words
 
 - **`description`** on a vertex or edge is printed in the type sheet. One
@@ -72,3 +76,55 @@ dropping an identity field. `schemacast select --episodes episodes.jsonl` shows
 each slice and its seeds without calling a model. A text that matches nothing
 in a large schema is quarantined as `selection_no_match` rather than cast
 against the whole schema.
+
+## The compact notation
+
+A shorter way to write a schema, for getting started: graflo's compact notation
+(`graflo.interop.compact`). It covers types, their descriptions, other names,
+keys, alternate keys and typed fields, and relations with fields. It is read as
+the graflo schema it stands for, so every command and `POST /cast` take it as
+they take a graflo schema. A file with `types` at the top is read as compact.
+
+```yaml
+name: team
+version: 1.0.0
+types:
+  Person:
+    about: A person.
+    key: email
+    alt_keys: [name]
+    fields:
+      email: str
+      name: str
+      role: {type: str, about: "What the person does, e.g. engineer."}
+  Company:
+    aka: [firm, employer]
+    key: name
+    fields: {name: str, founded: int}
+relations:
+  - Person WORKS_AT Company
+  - {from: Person, name: MANAGES, to: Person, fields: {since: datetime}}
+```
+
+| Key | Means | In graflo |
+|---|---|---|
+| `name`, `version`, `about` | the schema | `metadata` |
+| `types.<T>.about`, `aka` | what an instance is, other names | `description`, `semantics.synonyms` |
+| `key` | a field, or a list of fields, that identifies an entity | `identity` |
+| `hashed: true` | the key is a value, not a name: the identity is its digest (a tag, a label) | `hash_identity_properties` |
+| no `key` | each mention is a new entity (a comment, a note) | `blank: true` |
+| `alt_keys` | other keys: a list (each named `by_<fields>`) or a mapping name → fields | `secondary_identities` |
+| `fields.<f>` | `str`, `int`, `float`, `bool`, `datetime`, `uuid` or `any`; or `{type, about, aka, unit}` | `properties` |
+| `relations` | `"Source RELATION Target"`, or `{from, name, to, about, aka, fields}` | `edge_config.edges` |
+
+Quote a description that holds `: ` or `, ` inside braces, and a relation named
+like a YAML boolean (`ON`, `YES`) in the long form.
+
+The notation is a subset: a schema that needs more (inverses, edge identities,
+filters, IRIs, other field types) is written in graflo's format. Move between
+the two with:
+
+```bash
+schemacast schema --schema schema.yaml              # the graflo schema it stands for
+schemacast schema --schema schema.yaml --to compact # back; refused, naming what is lost, when it does not fit
+```

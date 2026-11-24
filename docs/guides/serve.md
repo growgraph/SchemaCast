@@ -31,7 +31,8 @@ endpoint.
 The reply holds what [`schemacast cast --out`](../reference/output.md) writes:
 `mentions` (one graflo `RecordGraph` per episode; each record, relation and
 property carries `evidence`: `{"quote": …, "span": {"start": …, "end": …}}`,
-`span.context` when read in a context item), `graph` (graflo's `GraFloOutput`
+`span.context` when read in a context item, and any qualifiers; what the text
+denies is left out and grounded only), `graph` (graflo's `GraFloOutput`
 of what the keys identify without a database), `staged` (graflo `Staged`:
 `records` of `StagedRecord`, and held `relations`), `groundings`, `unmapped`
 (by episode `source_id`: `quote`, `note`, `span`), `quarantine`, `episodes` and

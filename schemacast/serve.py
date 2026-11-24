@@ -71,7 +71,8 @@ class CastResponse(BaseModel):
         description=(
             "One graflo ``RecordGraph`` per episode cast: what to resolve and "
             "write. Each record, relation and property carries its quote and "
-            "span in ``evidence``."
+            "span in ``evidence``, and its qualifiers when set. What the text "
+            "denies is left out and is in ``groundings`` only."
         )
     )
     graph: dict[str, Any] = Field(

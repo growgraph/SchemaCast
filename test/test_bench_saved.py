@@ -25,7 +25,13 @@ from schemacast.cast import SchemaCaster
 from schemacast.config import SchemaCastSettings
 
 BY_NAME = {case.name: case for case in load_corpus()}
-CASES = ["direction/helpdesk", "units/lab", "identity/plant", "known/lab"]
+CASES = [
+    "direction/helpdesk",
+    "units/lab",
+    "identity/plant",
+    "known/lab",
+    "qualifiers/logistics",
+]
 
 
 def _own_corpus(root: Path, names: list[str]) -> Path:
@@ -158,6 +164,8 @@ def test_scoring_the_oracles_saved_casts_equals_its_run(tmp_path: Path):
         "props_matched",
         "spans_checked",
         "spans_hit",
+        "qualified_checked",
+        "qualified_agree",
         "forbidden_written",
     )
     for ran_case, scored_case in zip(

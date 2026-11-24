@@ -135,10 +135,10 @@ def test_the_cast_request_bytes_are_pinned():
     plant = load_schema(DATA / "plant.yaml")
     episode = _known_episode(KNOWN)
     assert _rendered(plant, episode) == (
-        "a7a2756c092808e8905116bed5df809464de07f854c586be3a3c86cb2126b082"
+        "a6dd55b687b178e21ee9bbcef469e5db1ab18c12b777e88e3ccab9f418dd2c88"
     )
     assert _rendered(plant, episode, SelectionConfig(max_elements=3)) == (
-        "b0997370e640335251828b21cfe7b1d192976f76fcd2319a2b82b9b8ac93ca7d"
+        "ec5bb54d48f93dd5c37064e1d45f1580a62bbaad2c20215cec91da5ddd544f38"
     )
 
 

@@ -1,6 +1,6 @@
 # SchemaCast <img src="https://raw.githubusercontent.com/growgraph/SchemaCast/refs/heads/main/docs/assets/logo.png" alt="SchemaCast logo" height="32" width="32"/>
 
-**Short texts in, a labeled property graph out, typed by a GraFlo schema you govern.**
+**Turn text into a knowledge graph. You say what to look for; every fact keeps the words it came from.**
 
 [![tests](https://img.shields.io/github/actions/workflow/status/growgraph/SchemaCast/tests.yml?branch=main&label=tests)](https://github.com/growgraph/SchemaCast/actions/workflows/tests.yml)
 [![pre-commit](https://img.shields.io/github/actions/workflow/status/growgraph/SchemaCast/pre-commit.yml?branch=main&label=pre-commit)](https://github.com/growgraph/SchemaCast/actions/workflows/pre-commit.yml)
@@ -9,66 +9,93 @@
 [![Docs](https://img.shields.io/badge/docs-growgraph.github.io-224777)](https://growgraph.github.io/SchemaCast/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-224777)](https://github.com/growgraph/SchemaCast/blob/main/LICENSE)
 
-SchemaCast reads messages, tickets and notes, and writes what they state as vertices and edges of a
-[GraFlo](https://github.com/growgraph/graflo) schema. Each text gets one model call, checked
-against the schema; what fails is corrected at most twice, then quarantined. Every vertex, edge
-and property keeps the quote it was read from.
-
-OntoCast builds and evolves an ontology from documents and writes RDF; SchemaCast casts short,
-frequent texts into a property-graph schema you already govern.
+SchemaCast reads short texts (news, messages, notes, tickets) and writes what they state as a
+graph: the entities, how they relate, and what is said about them. A schema of a few lines says
+what to look for. Each text is one model call, checked against that schema.
 
 **Status: alpha.** The API may change between minor releases.
 
-## Quick start
+## Three steps
+
+**1. Install**
 
 ```bash
-uv add schemacast        # or: pip install schemacast
+pip install schemacast
 ```
 
-Point it at any OpenAI-compatible endpoint:
+**2. Say what to look for**, in a few lines of YAML (`schema.yaml`):
 
-```bash
-# OpenAI (the default model is gpt-5.6-luna)
-export SCHEMACAST_LLM_API_KEY=sk-...
-
-# or Ollama
-export SCHEMACAST_LLM_BASE_URL=http://localhost:11434/v1
-export SCHEMACAST_LLM_MODEL=qwen3:8b
-export SCHEMACAST_LLM_API_KEY=local
+```yaml
+name: deals
+types:
+    Company: {key: name, fields: {name: str, sector: str, city: str}}
+    Person: {key: name, fields: {name: str}}
+relations:
+-   Person CEO_OF Company
+-   Company ACQUIRED Company
 ```
 
-Then, from a clone of the repository, with the example in [`examples/tickets/`](https://github.com/growgraph/SchemaCast/tree/main/examples/tickets):
-
-```bash
-schemacast sheet  --schema examples/tickets/schema.yaml        # what the model is shown; no call
-schemacast select --schema examples/tickets/schema.yaml --episodes examples/tickets/episodes.jsonl
-schemacast cast   --schema examples/tickets/schema.yaml --episodes examples/tickets/episodes.jsonl \
-               --out out/tickets [--db examples/connections/neo4j.yaml] [--replay]
-```
-
-An episodes file holds one JSON object per line:
+**3. Cast your texts**, one per line (`notes.jsonl`):
 
 ```json
-{"source_id": "mail-1041", "text": "Customer ACC-2291 opened ticket HD-4411 ...", "reference_time": "2026-03-02T09:14:00Z"}
+{"source_id": "note-1", "text": "Brightline, a payments company in Austin, acquired Oakfield for $40 million."}
+{"source_id": "note-4", "text": "Contrary to earlier reports, Raj Patel is not the CEO of Westpeak."}
 ```
 
-From Python:
-
-```python
-import asyncio
-from schemacast import SchemaCaster, load_schema, read_episodes
-
-schema = load_schema("examples/tickets/schema.yaml")
-result = asyncio.run(
-    SchemaCaster(schema).cast(read_episodes("examples/tickets/episodes.jsonl"))
-)
+```bash
+export SCHEMACAST_LLM_API_KEY=sk-...    # or any OpenAI-compatible endpoint, a local Ollama included
+schemacast cast --schema schema.yaml --episodes notes.jsonl --out out/
 ```
 
-`--out` gets each text's record graph, what their keys identify, what is staged until a lookup
-can identify it, a grounding per assertion, the quarantine, one result per text and a run
-manifest. `--replay` serves every reply from the cache and makes no
-request; everything but the manifest is byte-identical. Writing upserts by identity, so writing a
-cast twice changes nothing in a database that upserts.
+Out comes the graph, and every fact with the words it was read from (as the example's demo
+prints it):
+
+```text
+note-1  Company   'Brightline, a payments company in Austin'
+note-1  name      'Brightline'
+note-1  sector    'payments company'
+note-1  city      'Austin'
+note-1  Company   'Oakfield'
+note-1  name      'Oakfield'
+note-1  ACQUIRED  'Brightline, a payments company in Austin, acquired Oakfield for $40 million.'
+note-1  price     '$40 million'
+note-4  Person    'Raj Patel'
+note-4  Company   'Westpeak'
+note-4  CEO_OF    'Raj Patel is not the CEO of Westpeak'  denied
+```
+
+`$40 million` is stored as `price: 40000000.0`, checked as a number. The denial is kept with its
+quote and never written to the graph.
+
+No key yet? From a clone, `uv run python examples/hello/demo.py` runs this example on replies
+recorded once, for free. Its [ten lines](https://github.com/growgraph/SchemaCast/blob/main/examples/hello/demo.py) are also all it takes from Python.
+
+## What you get
+
+- **Checked facts.** Types, relations and values are checked against the schema; a reply that
+  fails is corrected at most twice, then set aside with its reason, never guessed.
+- **One entity per key.** "Brightline" in three notes is one company. A mention without its key
+  waits until a lookup can identify it, instead of creating a duplicate.
+- **Quotes and nuance.** Every fact keeps its quote and character span, and what the text says
+  about it: when it holds, whether it is only planned or hedged, and whether the text denies it.
+  A denial is kept, never written to the graph.
+- **Free reruns.** Replies are cached; `--replay` makes no request and gives the same graph, byte
+  for byte.
+- **Your database.** `--db conn.yaml` writes to any database [GraFlo](https://github.com/growgraph/graflo)
+  supports, Neo4j and ArangoDB among them. Writing a cast twice changes nothing in a database
+  that upserts.
+
+## Going further
+
+- **A bigger example**: [`examples/tickets/`](https://github.com/growgraph/SchemaCast/tree/main/examples/tickets), a support desk: replies that
+  belong to a ticket without naming it (`known`), mentions that wait for a lookup, and
+  `schemacast pick`, which links them to database candidates in one checked call.
+- **The full schema format**: the short YAML above is GraFlo's compact notation;
+  `schemacast schema --schema schema.yaml` prints the full GraFlo schema it stands for, which
+  SchemaCast also reads directly.
+- **Plain JSON out**: `cast --bundle` also writes nodes, edges and quotes as JSON Lines with
+  stable ids, readable without GraFlo.
+- **A service**: `schemacast serve` (extra `server`) offers `POST /cast` and `POST /pick`.
 
 ## Benchmark
 
@@ -80,14 +107,15 @@ runs a corpus of your own the same way (`--corpus DIR`), and scores saved casts 
 
 ## Not yet
 
-**Registry mode** is planned: selection across the schemas of a GraFlo schema registry, and an
-HTTP service. Today SchemaCast works on one schema file.
+**Registry mode** is planned: selection across the schemas of a GraFlo schema registry. Today a
+cast selects within one schema.
 
 ## Documentation
 
 [growgraph.github.io/SchemaCast](https://growgraph.github.io/SchemaCast/): installation, how a cast
-works, identities and mentions, preparing a schema, replay, writing to a database, the benchmark,
-and the reference.
+works, mentions and resolution, groundings and qualifiers, context and known entities, preparing a
+schema, replay, writing to a database, linking staged mentions, running as a service, the
+benchmark, and the reference.
 
 ```bash
 uv sync --group dev && uv run pytest              # tests
@@ -96,4 +124,4 @@ uv run --group docs properdocs serve              # the docs site
 
 ## Licence
 
-Apache-2.0.
+Apache-2.0. Maintained by [GrowGraph](https://growgraph.dev).

@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import click
-from graflo.architecture.schema.context import instance_json_schema, render_type_sheet
+import yaml
+from graflo.architecture.schema.context import render_type_sheet
 
 from schemacast import __version__
 from schemacast.config import SchemaCastSettings
@@ -21,6 +22,8 @@ from schemacast.schema_io import load_contract, load_schema
 from schemacast.select import SelectionConfig, SelectionError, select
 
 if TYPE_CHECKING:
+    from graflo.architecture.schema.document import Schema
+
     from schemacast.cast import CastResult
     from schemacast.pick import PickItem
 
@@ -66,6 +69,25 @@ def cast_summary(
     return lines, EX_TEMPFAIL if retry else 0
 
 
+def _schema_error(path: Path, error: Exception) -> click.ClickException:
+    """A schema file that does not load, as one message instead of a traceback."""
+    return click.ClickException(f"{path}: not a valid schema:\n{error}")
+
+
+def _load_schema(path: Path) -> Schema:
+    try:
+        return load_schema(path)
+    except (ValueError, TypeError, yaml.YAMLError) as error:
+        raise _schema_error(path, error) from error
+
+
+def _load_contract(path: Path) -> tuple[Schema, frozenset[str]]:
+    try:
+        return load_contract(path)
+    except (ValueError, TypeError, yaml.YAMLError) as error:
+        raise _schema_error(path, error) from error
+
+
 @click.group()
 @click.version_option(__version__, prog_name="schemacast")
 def main() -> None:
@@ -78,7 +100,7 @@ def main() -> None:
     "schema_path",
     required=True,
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    help="GraFlo schema or manifest (YAML or JSON).",
+    help="GraFlo schema or manifest, or a compact schema (YAML or JSON).",
 )
 @click.option(
     "--json-schema",
@@ -88,11 +110,48 @@ def main() -> None:
 )
 def sheet(schema_path: Path, as_json_schema: bool) -> None:
     """Print what a model is shown for SCHEMA. Makes no model call."""
-    schema = load_schema(schema_path)
+    schema = _load_schema(schema_path)
     if as_json_schema:
-        click.echo(json.dumps(instance_json_schema(schema), indent=2))
+        from schemacast.extract import episode_shape
+
+        click.echo(json.dumps(episode_shape(schema), indent=2))
     else:
         click.echo(render_type_sheet(schema), nl=False)
+
+
+@main.command("schema")
+@click.option(
+    "--schema",
+    "schema_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="GraFlo schema or manifest, or a compact schema (YAML or JSON).",
+)
+@click.option(
+    "--to",
+    "target",
+    type=click.Choice(["graflo", "compact"]),
+    default="graflo",
+    show_default=True,
+    help="The form to print.",
+)
+def schema_command(schema_path: Path, target: str) -> None:
+    """Print SCHEMA as a GraFlo schema or in the compact notation, as YAML.
+
+    A compact schema becomes the GraFlo schema it stands for; a GraFlo schema
+    the notation cannot express fully is refused, naming what would be lost.
+    """
+    from graflo.interop.compact import CompactUnsupported, to_compact
+
+    schema = _load_schema(schema_path)
+    if target == "graflo":
+        data = schema.to_minimal_canonical_dict()
+    else:
+        try:
+            data = to_compact(schema)
+        except CompactUnsupported as exc:
+            raise click.ClickException(str(exc)) from exc
+    click.echo(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), nl=False)
 
 
 @main.command("select")
@@ -101,7 +160,7 @@ def sheet(schema_path: Path, as_json_schema: bool) -> None:
     "schema_path",
     required=True,
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    help="GraFlo schema or manifest (YAML or JSON).",
+    help="GraFlo schema or manifest, or a compact schema (YAML or JSON).",
 )
 @click.option("--text", help="A single text to select for.")
 @click.option(
@@ -127,7 +186,7 @@ def select_command(
     config = SelectionConfig(
         max_tokens=settings.slice_max_tokens, max_elements=settings.slice_max_elements
     )
-    schema = load_schema(schema_path)
+    schema = _load_schema(schema_path)
     episodes: Iterable[Episode]
     if text is not None:
         episodes = [Episode(text=text, source_id="text")]
@@ -181,7 +240,7 @@ def select_command(
     "schema_path",
     required=True,
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    help="GraFlo schema or manifest (YAML or JSON).",
+    help="GraFlo schema or manifest, or a compact schema (YAML or JSON).",
 )
 @click.option(
     "--episodes",
@@ -214,6 +273,13 @@ def select_command(
     help="Drop and redefine the schema on the --db target first.",
 )
 @click.option(
+    "--bundle",
+    "write_bundle",
+    is_flag=True,
+    help="Also write the neutral bundle (plain JSON Lines, readable without "
+    "graflo) under OUT/bundle/.",
+)
+@click.option(
     "--concurrency", default=8, show_default=True, help="Episodes cast at once."
 )
 def cast(
@@ -223,6 +289,7 @@ def cast(
     db_path: Path | None,
     replay: bool,
     recreate_schema: bool,
+    write_bundle: bool,
     concurrency: int,
 ) -> None:
     """Cast EPISODES into SCHEMA and save the result under OUT.
@@ -249,7 +316,7 @@ def cast(
     out_dir.mkdir(parents=True, exist_ok=True)
     quarantine = out_dir / QUARANTINE_FILE
     quarantine.unlink(missing_ok=True)
-    schema, owned = load_contract(schema_path)
+    schema, owned = _load_contract(schema_path)
     caster = SchemaCaster(
         schema,
         settings=settings,
@@ -275,6 +342,10 @@ def cast(
             )
         )
     save_cast(result, out_dir, write_report=report, resolution=written)
+    if write_bundle:
+        from schemacast.neutral import BUNDLE_DIR, save_bundle
+
+        save_bundle(result, out_dir / BUNDLE_DIR, resolution=written)
     lines, status = cast_summary(result, out_dir, cache_enabled=settings.cache.enabled)
     for line in lines:
         click.echo(line, err=True)

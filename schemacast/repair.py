@@ -47,6 +47,13 @@ GUIDANCE: dict[FindingKind, str] = {
         "day, month and year for a date. Correct the value or the quote; if the text "
         "does not state the value, leave the property out."
     ),
+    "invalid_qualifier": (
+        "`when` is null when the text gives no time; otherwise `start` and `end` are "
+        "ISO 8601 dates (2024-03-04) or date-times (2024-03-04T18:00), `start` not "
+        "after `end`, `end` null when open, and `granularity` one of instant, day, "
+        "week, month, year. `modality` is actual, planned or hedged. A key property "
+        "is never negated: state a denied relation instead."
+    ),
     "quote_not_found": (
         "Every `quote` must be copied character for character from the TEXT. Do not "
         "paraphrase, shorten with ellipses or quote CONTEXT, except for a key of an "
@@ -57,6 +64,10 @@ GUIDANCE: dict[FindingKind, str] = {
 
 #: Added to a kind's guidance when one of its findings has this detail.
 DETAIL_GUIDANCE: dict[tuple[FindingKind, str], str] = {
+    ("quote_not_found", "when"): (
+        "A `when` quote is the time phrase itself, copied from the TEXT; set `when` "
+        "to null if the TEXT states no time."
+    ),
     ("coercion", "unit_mismatch"): (
         "A property shown with a unit in [brackets] takes its value in exactly that "
         "unit, and the symbol is case-sensitive (mW is not MW). If the text states the "

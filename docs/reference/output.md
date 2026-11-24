@@ -7,11 +7,12 @@
 | `mentions.jsonl` | one record graph per episode: mentions and relations | yes |
 | `graph.json` | the schema and what the keys identify: graflo's `GraFloOutput` | yes |
 | `staged.jsonl` | mentions not identified, and the relations waiting on them | yes |
-| `groundings.jsonl` | one [grounding](../concepts/groundings.md) per mention, relation and property | yes |
+| `groundings.jsonl` | one [grounding](../concepts/groundings.md) per mention, relation and property, denials included | yes |
 | `episodes.jsonl` | one result per episode | yes |
 | `quarantine.jsonl` | items left out, failed episodes and `unmapped` entries | yes |
 | `manifest.json` | versions, settings, counts and token usage | no: usage differs |
 | `write.json` | what was sent to the database, with `--db` | — |
+| `bundle/` | the [neutral bundle](bundle.md), with `--bundle` | yes |
 
 JSON is written with sorted keys, so two casts compare with `diff`.
 
@@ -38,7 +39,10 @@ and the stated `props` (each a `value`); its `relations`, each an `edge_id`
 between a `source` and a `target` ref, with props. Every record, relation and
 property carries `evidence`: `{"quote": str, "span": {"start": int, "end":
 int}}`, with `span.context` the context item's `source_id` when it was read
-there. A known entity a relation uses is a record with ref `k1`… and
+there. A relation's or property's `evidence` also holds `when`, `modality`
+(`planned`, `hedged`) and `negated: true` when the reply set them; a denied
+relation or property is left out of the record graph (see
+[Qualifiers](../concepts/groundings.md#qualifiers)). A known entity a relation uses is a record with ref `k1`… and
 `may_create: false`, its key as props, and `evidence` `{"known": role, "label":
 label}` instead of a quote and span (see [Known entities](../concepts/context.md#known-entities)).
 `unmapped` entries are in `quarantine.jsonl`.
@@ -63,7 +67,7 @@ outcome, usage).
 
 ## `manifest.json`
 
-The output format version (6: a record may be a known entity, with no quote or span; 5: mentions are graflo record graphs, quotes and spans in `evidence`, `unmapped` outside them, `staged.jsonl` lines without a `record` tag; 4: a cast is mention graphs resolved by keys, and groundings name mention refs; 3: vertex groundings named `resolved_by`; 2: groundings may point into context), the SchemaCast
+The output format version (7: relations and properties carry qualifiers, denials are in groundings only, property groundings carry their value; 6: a record may be a known entity, with no quote or span; 5: mentions are graflo record graphs, quotes and spans in `evidence`, `unmapped` outside them, `staged.jsonl` lines without a `record` tag; 4: a cast is mention graphs resolved by keys, and groundings name mention refs; 3: vertex groundings named `resolved_by`; 2: groundings may point into context), the SchemaCast
 and graflo versions, the schema as `name@version`, every model
 setting that reaches the provider, the token ceiling and slice budget, the
 counts by status, and `usage`: calls, cache hits, failures, re-asks, and

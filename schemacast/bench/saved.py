@@ -4,21 +4,24 @@ A saved cast is a JSON file holding a ``POST /cast`` response body, or a
 wrapper ``{"episodes": [...], "cast": <body>}``: the episodes sent and the body
 returned. Each episode's record graph is scored as the run scores a fresh
 cast. What only a live cast knows — the first reply before repair, the slice,
-tokens, a re-cast, picks — is not measured and is reported as such.
+tokens, a re-cast, picks — is not measured and is reported as such. What the
+text denies is in no record graph; it is read back from the groundings.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from graflo.link.records import RecordGraph
+from graflo.link.records import RecordGraph, RecordRelation, StatedProp
 
 from schemacast.bench.corpus import BenchCase
 from schemacast.bench.run import CaseRecord, EpisodeRecord, Row
 from schemacast.bench.score import Counts, Misses, score_episode, total
 from schemacast.cast import EpisodeOutcome, EpisodeResult
+from schemacast.ground import Grounding, TextSpan, evidence
 from schemacast.validate import Validation
 
 #: Counts a saved cast cannot supply; they stay zero and read as not measured.
@@ -98,6 +101,10 @@ class SavedCasts:
                     EpisodeResult.model_validate(r) for r in body["episodes"]
                 )
             }
+            found: dict[str, list[Grounding]] = {}
+            for item in body.get("groundings") or []:
+                grounding = Grounding.model_validate(item)
+                found.setdefault(grounding.source_id, []).append(grounding)
         except ValueError as error:
             raise SavedCastError(f"{path}: {error}") from error
         model = (body.get("manifest") or {}).get("model")
@@ -110,6 +117,7 @@ class SavedCasts:
                 results.get(source_id)
                 or EpisodeResult(source_id=source_id, status="ok"),
                 graphs.get(source_id),
+                found.get(source_id, []),
             )
 
     def label(self, paths: list[Path]) -> str:
@@ -120,14 +128,67 @@ class SavedCasts:
         return paths[0].stem
 
 
-def outcome(result: EpisodeResult, graph: RecordGraph | None) -> EpisodeOutcome:
-    """An episode outcome as a fresh cast would hold it, from its saved parts."""
+def statements(graph: RecordGraph, found: list[Grounding]) -> RecordGraph:
+    """*graph* with the relations and properties *found* grounds that it lacks:
+    what the text denies."""
+
+    def stated(g: Grounding) -> dict[str, Any]:
+        span = TextSpan(start=g.char_start, end=g.char_end, context=g.in_context)
+        return evidence(
+            g.quote, span, when=g.when, modality=g.modality, negated=g.negated
+        )
+
+    records = {r.ref: r.model_copy(deep=True) for r in graph.records}
+    relations = [r.model_copy(deep=True) for r in graph.relations]
+
+    def owner(g: Grounding) -> RecordRelation | None:
+        return next(
+            (
+                r
+                for r in relations
+                if (r.edge_id, r.source, r.target)
+                == (g.edge, g.source_ref, g.target_ref)
+            ),
+            None,
+        )
+
+    for g in found:
+        if g.kind != "edge" or g.edge is None or owner(g) is not None:
+            continue
+        if g.source_ref in records and g.target_ref in records:
+            relations.append(
+                RecordRelation(
+                    edge_id=g.edge,
+                    source=g.source_ref,
+                    target=g.target_ref,
+                    evidence=stated(g),
+                )
+            )
+    for g in found:
+        if g.kind != "property" or g.property is None:
+            continue
+        holder = records.get(g.ref) if g.ref is not None else owner(g)
+        if holder is not None and g.property not in holder.props:
+            holder.props[g.property] = StatedProp(value=g.value, evidence=stated(g))
+    return graph.model_copy(
+        update={"records": list(records.values()), "relations": relations}
+    )
+
+
+def outcome(
+    result: EpisodeResult,
+    graph: RecordGraph | None,
+    found: Sequence[Grounding] = (),
+) -> EpisodeOutcome:
+    """An episode outcome as a fresh cast would hold it, from its saved parts:
+    its record graph and its groundings."""
     if graph is None:
         return EpisodeOutcome(result=result)
-    known = [r for r in graph.records if "known" in (r.evidence or {})]
+    full = statements(graph, list(found))
+    known = [r for r in full.records if "known" in (r.evidence or {})]
     validation = Validation(
-        mentions=[r for r in graph.records if r not in known],
-        relations=list(graph.relations),
+        mentions=[r for r in full.records if r not in known],
+        relations=list(full.relations),
         known=known,
         fixes=list(result.fixes),
     )

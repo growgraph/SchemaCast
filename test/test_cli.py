@@ -34,6 +34,8 @@ def test_sheet_prints_the_reply_schema():
     shape = json.loads(result.output)
     vertex = shape["properties"]["vertices"]["items"]
     assert vertex["properties"]["type"]["enum"] == ["Machine", "Person", "WorkOrder"]
+    edge = shape["properties"]["edges"]["items"]
+    assert {"when", "modality", "negated"} <= set(edge["required"])
 
 
 def test_select_prints_one_json_line_per_episode():

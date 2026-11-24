@@ -1,0 +1,13 @@
+{
+    "content": "{\"vertices\":[{\"ref\":\"v1\",\"type\":\"Person\",\"quote\":\"Maya Chen\",\"mention\":false,\"props\":[{\"name\":\"name\",\"value\":\"Maya Chen\",\"quote\":\"Maya Chen\",\"when\":null,\"modality\":\"actual\",\"negated\":false}]},{\"ref\":\"v2\",\"type\":\"Company\",\"quote\":\"Brightline\",\"mention\":false,\"props\":[{\"name\":\"name\",\"value\":\"Brightline\",\"quote\":\"Brightline\",\"when\":null,\"modality\":\"actual\",\"negated\":false}]},{\"ref\":\"v3\",\"type\":\"Company\",\"quote\":\"Oakfield team\",\"mention\":false,\"props\":[{\"name\":\"name\",\"value\":\"Oakfield\",\"quote\":\"Oakfield\",\"when\":null,\"modality\":\"actual\",\"negated\":false},{\"name\":\"city\",\"value\":\"Denver\",\"quote\":\"stay in Denver\",\"when\":null,\"modality\":\"planned\",\"negated\":false}]}],\"edges\":[{\"relation\":\"CEO_OF\",\"from\":\"v1\",\"to\":\"v2\",\"quote\":\"CEO of Brightline\",\"when\":null,\"modality\":\"actual\",\"negated\":false,\"props\":[]}],\"unmapped\":[{\"quote\":\"says\",\"note\":\"Speech attribution is not represented by an available vertex, edge, or property type.\"}]}",
+    "mode": "json_schema",
+    "model": "gpt-5.6-luna",
+    "finish_reason": "stop",
+    "refusal": null,
+    "usage": {
+        "input_tokens": 1732,
+        "output_tokens": 695,
+        "reasoning_tokens": 422,
+        "cache_read_input_tokens": 0
+    }
+}

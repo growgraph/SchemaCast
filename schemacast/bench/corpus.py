@@ -36,6 +36,7 @@ from graflo.architecture.schema.document import Schema
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from schemacast.episode import Episode, read_episodes
+from schemacast.ground import Granularity, Modality
 
 BENCH_DIR = Path(__file__).parent
 CASES_DIR = BENCH_DIR / "cases"
@@ -44,15 +45,36 @@ SPLITS_FILE = CASES_DIR / "SPLITS.yaml"
 
 #: Bump whenever a case, schema or split assignment changes. Results from
 #: different versions are not comparable.
-CORPUS_VERSION = "1.5.0"
+CORPUS_VERSION = "1.6.0"
 
 #: Content hash of ``cases/`` and ``schemas/`` at :data:`CORPUS_VERSION`.
-CORPUS_DIGEST = "eb9c58e3938dd94fd4fd8196684dec08861686fd85ca3ee0389b32a24d9d67ee"
+CORPUS_DIGEST = "f0fc6b2b7c98cf01cf7b8e6ee45bc2c9fddcf1129053d99241851307a33e1a53"
 
 Split = Literal["dev", "test"]
 
 
-class ExpectedProp(BaseModel):
+class ExpectedWhen(BaseModel):
+    """The time a statement says its fact holds, as the reference time resolves it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    quote: str
+    start: str
+    end: str | None = None
+    granularity: Granularity
+
+
+class ExpectedQualifiers(BaseModel):
+    """Qualifiers an expected edge or property carries; defaults when unqualified."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    when: ExpectedWhen | None = None
+    modality: Modality = "actual"
+    negated: bool = False
+
+
+class ExpectedProp(ExpectedQualifiers):
     """A property value as the schema's field holds it, and the text it is read from.
 
     ``quote`` defaults to the value as written; give it when the text writes the
@@ -108,8 +130,8 @@ class ExpectedVertex(BaseModel):
         return _props(value)
 
 
-class ExpectedEdge(BaseModel):
-    """A relation the text states, between two vertex handles."""
+class ExpectedEdge(ExpectedQualifiers):
+    """A relation the text states, or denies, between two vertex handles."""
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 

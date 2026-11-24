@@ -26,7 +26,8 @@ and, when graflo graded them, the mention's stated properties against the
 entity: `matches`, `fits` (one is a less specific form of the other),
 `differs`, `conflicts`, or `unknown` when the entity holds nothing to compare.
 Only a conflict is evidence against the candidate, and it is not a bar; the
-model weighs it, and the check below ignores it.
+model weighs it, and the check below ignores it. In the input these levels are
+graflo's: `exact`, `compatible`, `differs`, `conflict` and `unknown`.
 
 The answer is checked without a model: the candidate must be one listed for
 that mention, of the mention's type, and answered once. Anything else is
@@ -66,6 +67,9 @@ Each line of `pick.jsonl` is one episode:
   "graph": {…}
 }
 ```
+
+`examples/tickets/pick.jsonl` is a complete one: the customer of `mail-1042`,
+known by an email two accounts share.
 
 `staged` entries are graflo `StagedCandidates`, the staged mention in `record`
 (its quote is read from `evidence`); `graph`, the episode's `RecordGraph`, is

@@ -36,6 +36,7 @@ HEADLINE: tuple[str, ...] = (
     "property_f1",
     "direction",
     "span_accuracy",
+    "qualifier_accuracy",
     "tokens_per_episode",
     "requests_per_episode",
 )

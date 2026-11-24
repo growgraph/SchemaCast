@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from schemacast.config import CacheSettings, LLMSettings, SchemaCastSettings
     from schemacast.episode import Episode, read_episodes
     from schemacast.ground import Grounding, TextSpan, UnmappedText
+    from schemacast.neutral import save_bundle
     from schemacast.output import save_cast, save_picks
     from schemacast.pick import Pick, Picker, PickItem, PickResult, apply_picks
     from schemacast.schema_io import load_schema
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
 
 _EXPORTS: dict[str, str] = {
     "CacheSettings": "schemacast.config",
+    "save_bundle": "schemacast.neutral",
     "CastResult": "schemacast.cast",
     "Episode": "schemacast.episode",
     "EpisodeResult": "schemacast.cast",
@@ -75,6 +77,7 @@ __all__ = [
     "load_connection",
     "load_schema",
     "read_episodes",
+    "save_bundle",
     "save_cast",
     "save_picks",
     "write_cast",

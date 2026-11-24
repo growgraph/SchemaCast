@@ -1,0 +1,13 @@
+{
+    "content": "{\"vertices\":[{\"ref\":\"v1\",\"type\":\"Company\",\"quote\":\"Brightline\",\"mention\":true,\"props\":[{\"name\":\"name\",\"value\":\"Brightline\",\"quote\":\"Brightline\",\"when\":null,\"modality\":\"actual\",\"negated\":false}]},{\"ref\":\"v2\",\"type\":\"Company\",\"quote\":\"Westpeak, a Boston lender\",\"mention\":false,\"props\":[{\"name\":\"name\",\"value\":\"Westpeak\",\"quote\":\"Westpeak\",\"when\":null,\"modality\":\"actual\",\"negated\":false},{\"name\":\"city\",\"value\":\"Boston\",\"quote\":\"Boston\",\"when\":null,\"modality\":\"actual\",\"negated\":false},{\"name\":\"sector\",\"value\":\"lender\",\"quote\":\"lender\",\"when\":null,\"modality\":\"actual\",\"negated\":false}]}],\"edges\":[{\"relation\":\"ACQUIRED\",\"from\":\"v1\",\"to\":\"v2\",\"quote\":\"plans to buy Westpeak\",\"when\":{\"quote\":\"next year\",\"start\":\"2027-01-01\",\"end\":\"2027-12-31\",\"granularity\":\"year\"},\"modality\":\"planned\",\"negated\":false,\"props\":[]}],\"unmapped\":[]}",
+    "mode": "json_schema",
+    "model": "gpt-5.6-luna",
+    "finish_reason": "stop",
+    "refusal": null,
+    "usage": {
+        "input_tokens": 1728,
+        "output_tokens": 526,
+        "reasoning_tokens": 274,
+        "cache_read_input_tokens": 1614
+    }
+}

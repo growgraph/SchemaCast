@@ -11,6 +11,7 @@ from schemacast.extract import (
     INSTANCE_SCHEMA_NAME,
     EpisodeTooLongError,
     WireShapeError,
+    episode_shape,
     extract,
 )
 from schemacast.prompt import build_messages
@@ -71,7 +72,7 @@ async def test_one_call_with_the_slice_prompt_and_shape(make_client, plant, epis
     assert request["messages"] == build_messages(plant, episode)
     assert request["response_format"]["json_schema"] == {
         "name": INSTANCE_SCHEMA_NAME,
-        "schema": instance_json_schema(plant),
+        "schema": episode_shape(plant),
         "strict": True,
     }
     wire = extraction.wire

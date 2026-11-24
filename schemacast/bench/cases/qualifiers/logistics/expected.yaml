@@ -1,0 +1,71 @@
+qualifiers-logistics-1:
+    vertices:
+        s:
+            type: Shipment
+            quote: Shipment TRK-8801
+            mention: true
+            props:
+                tracking: TRK-8801
+        depot:
+            type: Warehouse
+            quote: depot LYS-1
+            mention: true
+            props:
+                code: LYS-1
+        other:
+            type: Warehouse
+            quote: PAR-2
+            mention: true
+            props:
+                code: PAR-2
+    edges:
+    -   relation: SHIPPED_FROM
+        from: s
+        to: depot
+        quote: TRK-8801 left from depot LYS-1
+    -   relation: SHIPPED_FROM
+        from: s
+        to: other
+        quote: not from PAR-2
+        negated: true
+qualifiers-logistics-2:
+    vertices:
+        s:
+            type: Shipment
+            quote: Shipment TRK-8802
+            mention: true
+            props:
+                tracking: TRK-8802
+        c:
+            type: Carrier
+            quote: carrier Nordfrakt
+            mention: true
+            props:
+                name: Nordfrakt
+    edges:
+    -   relation: CARRIED_BY
+        from: s
+        to: c
+        quote: TRK-8802 goes out with carrier Nordfrakt
+        modality: planned
+        when:
+            quote: tonight
+            start: '2026-10-16'
+            end: '2026-10-16'
+            granularity: day
+qualifiers-logistics-3:
+    vertices:
+        s:
+            type: Shipment
+            quote: Shipment TRK-8803
+            props:
+                tracking: TRK-8803
+                shipped:
+                    value: '2026-10-21'
+                    quote: 21 Oct 2026
+                    modality: planned
+                    when:
+                        quote: on 21 Oct 2026
+                        start: '2026-10-21'
+                        end: '2026-10-21'
+                        granularity: day

@@ -1,6 +1,6 @@
 # Installation
 
-SchemaCast needs Python 3.11 or later and graflo 1.17 or later.
+SchemaCast needs Python 3.11 or later and graflo 1.27.5 or later.
 
 ```bash
 uv add schemacast        # or: pip install schemacast
@@ -22,7 +22,7 @@ and no vector store; a test keeps it that way.
 
 | Command | What it is |
 |---|---|
-| `schemacast` | `sheet`, `select` and `cast`; see [Command line](../reference/cli.md) |
+| `schemacast` | `cast`, `sheet`, `select`, `schema`, `pick` and `serve` (the `server` extra: `uv add 'schemacast[server]'`); see [Command line](../reference/cli.md) |
 | `schemacast-bench` | the [benchmark](../guides/benchmark.md) |
 
 ## Pointing it at a model

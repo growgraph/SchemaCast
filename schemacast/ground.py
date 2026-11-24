@@ -7,17 +7,25 @@ be found is a hallucination flag, handled by validation.
 A cast's record graph carries each quote and span in graflo's ``evidence``,
 as ``{"quote": str, "span": {"start": int, "end": int, "context": str}}``
 (``context`` only when set); :func:`evidence`, :func:`quote_of` and
-:func:`span_of` write and read it.
+:func:`span_of` write and read it. A relation's or property's evidence also
+holds its qualifiers when they are not the defaults: ``when`` (a
+:class:`StatedTime`), ``modality`` (``planned`` or ``hedged``) and
+``negated: true``; :func:`when_of`, :func:`modality_of` and :func:`negated_of`
+read them.
+
+A statement the text denies is grounded but is no fact: :func:`affirmed` gives
+the record graph without denied relations and properties, which is what a cast
+resolves and writes.
 """
 
 from __future__ import annotations
 
 import unicodedata
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 from graflo.architecture.graph_types.identifiers import EdgeId
-from graflo.link.records import RecordGraph
+from graflo.link.records import PartialRecord, RecordGraph
 from pydantic import BaseModel, ConfigDict, Field
 
 from schemacast.episode import Episode
@@ -76,9 +84,69 @@ class UnmappedText(BaseModel):
     span: TextSpan
 
 
-def evidence(quote: str, span: TextSpan) -> dict[str, Any]:
-    """The ``evidence`` of a record, relation or property read at *span*."""
-    return {"quote": quote, "span": span.model_dump(exclude_none=True)}
+Modality = Literal["actual", "planned", "hedged"]
+Granularity = Literal["instant", "day", "week", "month", "year"]
+MODALITIES: tuple[Modality, ...] = ("actual", "planned", "hedged")
+GRANULARITIES: tuple[Granularity, ...] = ("instant", "day", "week", "month", "year")
+
+
+class StatedTime(BaseModel):
+    """When a statement says its fact holds, resolved against the episode's
+    reference time."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    quote: str = Field(description="The time phrase as it stands in the text.")
+    span: TextSpan
+    start: str = Field(description="ISO 8601 date or date-time.")
+    end: str | None = Field(
+        default=None, description="ISO 8601 date or date-time; None when open."
+    )
+    granularity: Granularity
+
+
+def parse_iso(value: str) -> date | datetime | None:
+    """*value* as an ISO 8601 date or date-time; None when it is neither."""
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        pass
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def not_after(start: date | datetime, end: date | datetime) -> bool:
+    """``start <= end``. A date compares by day with either; date-times of
+    which only one carries an offset compare by wall clock."""
+    if not isinstance(start, datetime) or not isinstance(end, datetime):
+        first = start.date() if isinstance(start, datetime) else start
+        last = end.date() if isinstance(end, datetime) else end
+        return first <= last
+    if (start.tzinfo is None) != (end.tzinfo is None):
+        start, end = start.replace(tzinfo=None), end.replace(tzinfo=None)
+    return start <= end
+
+
+def evidence(
+    quote: str,
+    span: TextSpan,
+    *,
+    when: StatedTime | None = None,
+    modality: Modality = "actual",
+    negated: bool = False,
+) -> dict[str, Any]:
+    """The ``evidence`` of a record, relation or property read at *span*;
+    qualifiers are set only when they differ from the defaults."""
+    out: dict[str, Any] = {"quote": quote, "span": span.model_dump(exclude_none=True)}
+    if when is not None:
+        out["when"] = when.model_dump(mode="json", exclude_none=True)
+    if modality != "actual":
+        out["modality"] = modality
+    if negated:
+        out["negated"] = True
+    return out
 
 
 def quote_of(evidence: dict[str, Any] | None) -> str | None:
@@ -91,6 +159,56 @@ def span_of(evidence: dict[str, Any] | None) -> TextSpan | None:
     """The span an ``evidence`` holds, if any."""
     span = (evidence or {}).get("span")
     return TextSpan.model_validate(span) if isinstance(span, dict) else None
+
+
+def when_of(evidence: dict[str, Any] | None) -> StatedTime | None:
+    """The stated time an ``evidence`` holds, if any."""
+    when = (evidence or {}).get("when")
+    return StatedTime.model_validate(when) if isinstance(when, dict) else None
+
+
+def modality_of(evidence: dict[str, Any] | None) -> Modality:
+    """The modality an ``evidence`` holds; ``actual`` when unset."""
+    modality = (evidence or {}).get("modality")
+    return modality if modality in ("planned", "hedged") else "actual"
+
+
+def negated_of(evidence: dict[str, Any] | None) -> bool:
+    """Whether an ``evidence`` marks its statement as denied."""
+    return (evidence or {}).get("negated") is True
+
+
+def affirmed(graph: RecordGraph) -> RecordGraph:
+    """*graph* without the relations and properties its text denies, and
+    without a known entity's record that only a denied relation used."""
+    relations = [
+        relation.model_copy(
+            update={
+                "props": {
+                    name: prop
+                    for name, prop in relation.props.items()
+                    if not negated_of(prop.evidence)
+                }
+            }
+        )
+        for relation in graph.relations
+        if not negated_of(relation.evidence)
+    ]
+    used = {ref for r in relations for ref in (r.source, r.target)}
+    records: list[PartialRecord] = [
+        record.model_copy(
+            update={
+                "props": {
+                    name: prop
+                    for name, prop in record.props.items()
+                    if not negated_of(prop.evidence)
+                }
+            }
+        )
+        for record in graph.records
+        if "known" not in (record.evidence or {}) or record.ref in used
+    ]
+    return graph.model_copy(update={"records": records, "relations": relations})
 
 
 def _fold(char: str) -> str:
@@ -199,6 +317,21 @@ class Grounding(BaseModel):
         "for the episode's own text. Only key values ground in context.",
     )
     quote: str = Field(description="The text at the span, as it stands in the source.")
+    value: Any = Field(
+        default=None, description="The value stated, coerced; for a property."
+    )
+    when: StatedTime | None = Field(
+        default=None,
+        description="When the text says it holds; relations and properties.",
+    )
+    modality: Modality = Field(
+        default="actual",
+        description="``actual``, ``planned`` or ``hedged``; a vertex is ``actual``.",
+    )
+    negated: bool = Field(
+        default=False,
+        description="The text denies this relation or value; it is in no fact.",
+    )
     extractor: str = Field(description="``schemacast/<version>``.")
     model: str | None = Field(
         default=None, description="Model that produced the reply."
@@ -215,13 +348,20 @@ def groundings(
     model: str | None = None,
 ) -> list[Grounding]:
     """One grounding per record, relation and stated property of *graph* whose
-    ``evidence`` holds a span; none for a known entity's record."""
+    ``evidence`` holds a span; none for a known entity's record. Pass the graph
+    of every statement, denials included (:func:`affirmed` is what resolves)."""
     out: list[Grounding] = []
 
     def add(found: dict[str, Any] | None, **target: Any) -> None:
         span = span_of(found)
         if span is None:
             return
+        if target["kind"] != "vertex":
+            target.update(
+                when=when_of(found),
+                modality=modality_of(found),
+                negated=negated_of(found),
+            )
         text = episode.text
         if span.context is not None:
             text = [i.text for i in episode.context if i.source_id == span.context][-1]
@@ -246,7 +386,13 @@ def groundings(
         target = {"vertex": record.type, "ref": record.ref}
         add(record.evidence, kind="vertex", **target)
         for name, prop in record.props.items():
-            add(prop.evidence, kind="property", property=name, **target)
+            add(
+                prop.evidence,
+                kind="property",
+                property=name,
+                value=prop.value,
+                **target,
+            )
     for relation in graph.relations:
         target = {
             "edge": relation.edge_id,
@@ -255,5 +401,11 @@ def groundings(
         }
         add(relation.evidence, kind="edge", **target)
         for name, prop in relation.props.items():
-            add(prop.evidence, kind="property", property=name, **target)
+            add(
+                prop.evidence,
+                kind="property",
+                property=name,
+                value=prop.value,
+                **target,
+            )
     return out

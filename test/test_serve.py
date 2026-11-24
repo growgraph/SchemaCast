@@ -59,7 +59,7 @@ def test_a_cast_returns_what_the_cli_writes(make_service):
     assert {g["kind"] for g in body["groundings"]} == {"vertex", "edge", "property"}
     assert [r["record"] for r in body["quarantine"]] == ["unmapped"]
     assert body["manifest"]["episodes"] == 2
-    assert body["manifest"]["output_format_version"] == 6
+    assert body["manifest"]["output_format_version"] == 7
     assert len(endpoint.requests) == 2
 
 
@@ -170,3 +170,30 @@ def test_importing_the_service_loads_nothing_heavy():
         [sys.executable, "-c", probe], capture_output=True, text=True, check=True
     ).stdout.strip()
     assert loaded == ""
+
+
+def test_a_compact_schema_is_served_like_a_graflo_one(make_service):
+    import json
+    from pathlib import Path
+
+    from graflo.interop.compact import to_compact
+
+    from schemacast.episode import read_episodes
+    from schemacast.schema_io import load_schema
+
+    tickets = Path(__file__).parents[1] / "examples" / "tickets"
+    replies = json.loads((DATA / "tickets_replies.json").read_text(encoding="utf-8"))
+    (episode, *_) = read_episodes(tickets / "episodes.jsonl")
+    episodes = [episode.model_dump(mode="json")]
+
+    graphs = []
+    for schema in (
+        yaml.safe_load((tickets / "schema.yaml").read_text()),
+        to_compact(load_schema(tickets / "schema.yaml")),
+    ):
+        service, _ = make_service({"mail-1041": [json.dumps(replies["mail-1041"][0])]})
+        body = {"schema": schema, "episodes": episodes, "options": {}}
+        response = service.post("/cast", json=body, headers=AUTH)
+        assert response.status_code == 200, response.text
+        graphs.append(response.json()["graph"])
+    assert graphs[0] == graphs[1]

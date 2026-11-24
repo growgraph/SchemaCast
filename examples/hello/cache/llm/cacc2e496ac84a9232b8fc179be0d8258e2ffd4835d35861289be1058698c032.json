@@ -1,0 +1,13 @@
+{
+    "content": "{\"vertices\":[{\"ref\":\"v1\",\"type\":\"Company\",\"quote\":\"Westpeak\",\"mention\":false,\"props\":[{\"name\":\"name\",\"value\":\"Westpeak\",\"quote\":\"Westpeak\",\"when\":null,\"modality\":\"actual\",\"negated\":false}]},{\"ref\":\"v2\",\"type\":\"Person\",\"quote\":\"Ana Ruiz\",\"mention\":false,\"props\":[{\"name\":\"name\",\"value\":\"Ana Ruiz\",\"quote\":\"Ana Ruiz\",\"when\":null,\"modality\":\"actual\",\"negated\":false}]}],\"edges\":[{\"relation\":\"CEO_OF\",\"from\":\"v2\",\"to\":\"v1\",\"quote\":\"Westpeak named Ana Ruiz its CEO in 2023.\",\"when\":{\"quote\":\"in 2023\",\"start\":\"2023-01-01\",\"end\":\"2023-12-31\",\"granularity\":\"year\"},\"modality\":\"actual\",\"negated\":false,\"props\":[]}],\"unmapped\":[]}",
+    "mode": "json_schema",
+    "model": "gpt-5.6-luna",
+    "finish_reason": "stop",
+    "refusal": null,
+    "usage": {
+        "input_tokens": 1725,
+        "output_tokens": 445,
+        "reasoning_tokens": 243,
+        "cache_read_input_tokens": 1614
+    }
+}

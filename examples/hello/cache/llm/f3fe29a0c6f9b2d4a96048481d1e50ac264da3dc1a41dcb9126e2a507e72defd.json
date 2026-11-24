@@ -1,0 +1,13 @@
+{
+    "content": "{\"vertices\":[{\"ref\":\"v1\",\"type\":\"Company\",\"quote\":\"Brightline, a payments company in Austin\",\"mention\":false,\"props\":[{\"name\":\"name\",\"value\":\"Brightline\",\"quote\":\"Brightline\",\"when\":null,\"modality\":\"actual\",\"negated\":false},{\"name\":\"sector\",\"value\":\"payments\",\"quote\":\"payments company\",\"when\":null,\"modality\":\"actual\",\"negated\":false},{\"name\":\"city\",\"value\":\"Austin\",\"quote\":\"Austin\",\"when\":null,\"modality\":\"actual\",\"negated\":false}]},{\"ref\":\"v2\",\"type\":\"Company\",\"quote\":\"Oakfield\",\"mention\":true,\"props\":[{\"name\":\"name\",\"value\":\"Oakfield\",\"quote\":\"Oakfield\",\"when\":null,\"modality\":\"actual\",\"negated\":false}]}],\"edges\":[{\"relation\":\"ACQUIRED\",\"from\":\"v1\",\"to\":\"v2\",\"quote\":\"Brightline, a payments company in Austin, acquired Oakfield for $40 million.\",\"when\":null,\"modality\":\"actual\",\"negated\":false,\"props\":[{\"name\":\"price\",\"value\":40000000,\"quote\":\"$40 million\",\"when\":null,\"modality\":\"actual\",\"negated\":false}]}],\"unmapped\":[]}",
+    "mode": "json_schema",
+    "model": "gpt-5.6-luna",
+    "finish_reason": "stop",
+    "refusal": null,
+    "usage": {
+        "input_tokens": 1732,
+        "output_tokens": 385,
+        "reasoning_tokens": 117,
+        "cache_read_input_tokens": 1614
+    }
+}

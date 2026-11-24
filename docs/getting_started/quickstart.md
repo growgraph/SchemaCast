@@ -1,98 +1,109 @@
 # Quick start
 
-This walks through the example in `examples/tickets/` of the repository: five
-texts from a support desk and a small schema of customers, agents, tickets,
-products, tags and comments.
+Three steps: install, say what to look for, cast your texts. The example is in
+[`examples/hello/`](https://github.com/growgraph/SchemaCast/tree/main/examples/hello):
+five short news notes about made-up companies, turned into a graph of who runs
+what and who bought whom.
 
-## 1. Look at what the model will see
-
-```bash
-schemacast sheet --schema examples/tickets/schema.yaml
-```
-
-This prints the **type sheet**: every vertex type with its description, other
-names and properties, how it is identified, and every edge as
-`(Source)-[RELATION]->(Target)`. It is all the model learns about the schema.
-No model is called.
+## 1. Install
 
 ```bash
-schemacast select --schema examples/tickets/schema.yaml --episodes examples/tickets/episodes.jsonl
+pip install schemacast
 ```
 
-This shows the slice of the schema each text would be cast against. A small
-schema passes whole; a large one is cut down to the types the text is about.
+To run the example as it is, clone the repository:
 
-## 2. Write the texts as episodes
+```bash
+git clone https://github.com/growgraph/SchemaCast && cd SchemaCast && uv sync
+```
 
-An episodes file holds one JSON object per line:
+## 2. Say what to look for
+
+A schema names the kinds of things in your texts and how they relate. This one
+has two types and two relations:
+
+```yaml
+--8<-- "examples/hello/schema.yaml"
+```
+
+`key` is what makes two mentions the same entity: "Brightline" in two notes is
+one company. `fields` are what to read about each one, with a type the value is
+checked against. That is all a first schema needs; [Preparing a
+schema](../guides/schema.md) covers the rest.
+
+## 3. Cast your texts
+
+One text per line, with an id for where it came from and the time it was written
+(so "next year" means something):
 
 ```json
-{"source_id": "mail-1041", "text": "Customer ACC-2291 (Jo Park) opened ticket HD-4411 ...", "reference_time": "2026-03-02T09:14:00Z", "metadata": {"channel": "email"}}
+--8<-- "examples/hello/episodes.jsonl"
 ```
 
-`source_id` identifies the record the text came from, `reference_time` resolves
-dates such as "yesterday", and `metadata` is kept with the record but never
-shown to the model.
-
-## 3. Cast
-
-With a model configured (see [Installation](installation.md)):
+With a model key:
 
 ```bash
-schemacast cast --schema examples/tickets/schema.yaml \
-    --episodes examples/tickets/episodes.jsonl --out out/tickets
+export SCHEMACAST_LLM_API_KEY=sk-...
+schemacast cast --schema examples/hello/schema.yaml \
+    --episodes examples/hello/episodes.jsonl --out out/hello
 ```
 
-A one-line summary counts the texts cast whole (`ok`), in part (`partial`) or
-not at all (`failed`). Under `out/tickets/`:
-
-| File | Holds |
-|---|---|
-| `mentions.jsonl` | what each text names and states, before identification |
-| `graph.json` | the schema and what the mentions' keys identify |
-| `staged.jsonl` | mentions not identified yet, with why |
-| `groundings.jsonl` | the quote and character span of every mention, relation and property |
-| `quarantine.jsonl` | what was left out and why, with the model's reply |
-| `episodes.jsonl` | one result per text |
-| `manifest.json` | versions, settings, counts and token usage |
-
-The last text of the example, an instruction to change every ticket, should
-produce nothing: the text is data to the model, and anything it does write must
-pass the schema.
-
-## 4. Write to a database
+No key? The example ships the model's replies, recorded once, so you can see the
+result first, for free:
 
 ```bash
-schemacast cast ... --db examples/connections/neo4j.yaml
+uv run python examples/hello/demo.py
 ```
 
-A connection file is a graflo connection config; see
-[Writing to a database](../guides/database.md).
+Any OpenAI-compatible endpoint works, a local Ollama included; see
+[Installation](installation.md#pointing-it-at-a-model).
 
-## 5. Run it again for free
+## What comes out
 
-```bash
-schemacast cast ... --out out/tickets-again --replay
+Every fact, each with the words it was read from:
+
+```text
+--8<-- "examples/hello/expected.txt"
 ```
 
-Every reply comes from the cache: no request is made, and everything but
-`manifest.json` is byte-identical. See [Replay and the cache](../guides/replay.md).
+- **One entity per key.** Brightline appears in three notes and is one company;
+  note 2 adds to what note 1 said about Oakfield.
+- **Plans are marked.** "plans to buy Westpeak" is an acquisition marked
+  `planned`, and "next year" is read as 2027 from the date of the note.
+- **Denials are kept apart.** "Raj Patel is not the CEO" is quoted, marked
+  `denied`, and never written to the graph.
+- **Dates are read.** "in 2023" is kept as when Ana Ruiz's role holds.
+- **Values are typed.** "$40 million" is stored as `price: 40000000.0`, checked
+  as a number.
 
-## From Python
+Under `out/hello/`, `graph.json` holds the graph and `groundings.jsonl` the
+quote and character span of every fact; [Output files](../reference/output.md)
+lists the rest.
 
+## The same from Python
+
+The demo is the whole program:
+
+<!-- fmt: off -->
 ```python
-import asyncio
-
-from schemacast import SchemaCaster, load_schema, read_episodes, save_cast
-
-schema = load_schema("examples/tickets/schema.yaml")
-result = asyncio.run(
-    SchemaCaster(schema).cast(read_episodes("examples/tickets/episodes.jsonl"))
-)
-
-print(result.manifest.status)  # {'ok': ..., 'partial': ..., 'failed': ...}
-save_cast(result, "out/tickets")
+--8<-- "examples/hello/demo.py"
 ```
+<!-- fmt: on -->
 
-`result.output` is graflo's `GraFloOutput`: the schema with one `GraphContainer`
-of vertices and edges.
+`result.output` holds the graph; `result.groundings` the quotes.
+
+## Next steps
+
+- **Write it to a database**: add `--db connection.yaml` (Neo4j, ArangoDB, and
+  the rest graflo supports). See [Writing to a database](../guides/database.md).
+- **Run it again for free**: `--replay` serves every reply from the cache and
+  makes no request. See [Replay and the cache](../guides/replay.md).
+- **See what the model is shown**: `schemacast sheet --schema schema.yaml`, no
+  model call.
+- **Plain JSON out**: `--bundle` also writes nodes and edges as JSON Lines with
+  stable ids. See [The neutral bundle](../reference/bundle.md).
+- **A bigger example**: [`examples/tickets/`](https://github.com/growgraph/SchemaCast/tree/main/examples/tickets),
+  a support desk, shows texts that belong to a thread without naming it
+  ([known entities](../concepts/context.md#known-entities)), mentions that wait
+  for a lookup, and [linking them](../guides/pick.md).
+- **How it works**: [How a cast works](../concepts/index.md).
