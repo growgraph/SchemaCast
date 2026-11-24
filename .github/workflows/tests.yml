@@ -16,9 +16,6 @@ concurrency:
 permissions:
     contents: read
 
-# Development uses graflo from a sibling checkout (`tool.uv.sources`); CI has
-# none, so every sync passes `--no-sources` and resolves graflo from PyPI.
-
 jobs:
     # Guards the packaged artifact: a plain install must import and stay light.
     import-smoke:
@@ -30,7 +27,7 @@ jobs:
             with:
                 version: "0.12.21"
         -   name: Build wheel
-            run: uv build --wheel --no-sources --out-dir dist
+            run: uv build --wheel --out-dir dist
         -   name: Install the wheel
             run: |
                 uv venv --python 3.12 /tmp/base-install
@@ -68,14 +65,14 @@ jobs:
                 version: "0.12.21"
                 enable-cache: true
         -   name: Install dependencies
-            run: uv sync --no-sources --group dev
+            run: uv sync --group dev
         -   name: Type check
             if: matrix.python-version == '3.12'
-            run: uv run --no-sources ty check schemacast test
+            run: uv run ty check schemacast test
         # No model is called: tests use a scripted endpoint, and the `llm` and
         # `neo4j` markers are skipped without --run-llm / --run-neo4j.
         -   name: Run tests
-            run: uv run --no-sources pytest
+            run: uv run pytest
             env:
                 PYTHONUNBUFFERED: '1'
 
@@ -98,7 +95,7 @@ jobs:
                 version: "0.12.21"
                 enable-cache: true
         -   name: Install dependencies
-            run: uv sync --no-sources --group dev
+            run: uv sync --group dev
         -   name: Select graflo
             run: |
                 range=$(sed -nE 's/^ *"(graflo>=[^"]+)",?$/\1/p' pyproject.toml)

@@ -39,7 +39,7 @@ jobs:
                 fi
         -   name: Build and publish
             run: |
-                uv build --no-sources
+                uv build
                 uv publish
             env:
                 UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}

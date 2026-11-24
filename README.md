@@ -122,6 +122,12 @@ uv sync --group dev && uv run pytest              # tests
 uv run --group docs properdocs serve              # the docs site
 ```
 
+## Contributing
+
+See [Contributing](https://growgraph.github.io/SchemaCast/contributing/). Contributors accept the
+[Contributor License Agreement](https://github.com/growgraph/SchemaCast/blob/main/CLA.md) once, by
+commenting on their first pull request.
+
 ## Licence
 
 Apache-2.0. Maintained by [GrowGraph](https://growgraph.dev).

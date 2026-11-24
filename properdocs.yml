@@ -97,6 +97,7 @@ nav:
     -   Output files: reference/output.md
     -   The neutral bundle: reference/bundle.md
     -   Python API: reference/python/
+-   Contributing: contributing.md
 markdown_extensions:
 -   pymdownx.highlight:
         anchor_linenums: true
