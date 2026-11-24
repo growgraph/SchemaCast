@@ -7,11 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- `CONTRIBUTING.md`, a contributing guide in the docs, and the Contributor License Agreement
-  (`CLA.md`), checked on every pull request.
-
 ## [0.4.0] - 2026-11-24
 
 ### Added
@@ -56,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lead with it.
 - `examples/tickets`: a text about a known ticket, a text with a denial, a planned date and a
   hedged value, and `pick.jsonl`.
+- `CONTRIBUTING.md`, a contributing guide in the docs, and the Contributor License Agreement
+  (`CLA.md`), checked on every pull request.
 
 ### Changed
 
