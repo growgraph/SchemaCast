@@ -42,9 +42,9 @@ def test_the_corpus_digest_is_pinned_to_its_version():
 def test_every_family_has_two_dev_and_two_test_instances():
     families = Counter((case.family, case.split) for case in CORPUS)
     names = {case.family for case in CORPUS}
-    assert len(names) == 10
+    assert len(names) == 11
     for family in names:
-        per_half = 1 if family == "known" else 2
+        per_half = 1 if family in ("known", "qualifiers") else 2
         assert families[(family, "dev")] == per_half
         assert families[(family, "test")] == per_half
 
@@ -79,6 +79,18 @@ def test_the_expected_graph_is_in_the_text(case: BenchCase):
             kinds.update(
                 {h: v.type for h, v in {**expected.vertices, **graph.vertices}.items()}
             )
+            qualified = [
+                item
+                for item in (
+                    *graph.edges,
+                    *(p for e in graph.edges for p in e.props.values()),
+                    *(p for v in graph.vertices.values() for p in v.props.values()),
+                )
+                if item.when is not None
+            ]
+            for item in qualified:
+                assert item.when is not None
+                assert locate(item.when.quote, text), (episode.source_id, item.when)
             for edge in graph.edges:
                 assert locate(edge.quote, text), (episode.source_id, edge.relation)
                 edge_id = (kinds[edge.from_], kinds[edge.to], edge.relation)
@@ -111,11 +123,13 @@ def test_the_oracle_scores_perfectly_on_the_whole_schema():
         assert counts.forbidden_written == 0, case.name
         assert counts.spans_hit == counts.spans_checked, case.name
         assert counts.mention_agree == counts.entities_matched, case.name
+        assert counts.qualified_agree == counts.qualified_checked, case.name
         assert counts.edges_reversed == 0 and counts.nonconforming_first == 0, case.name
         assert counts.recast_added == 0 and counts.recast_duplicated == 0, case.name
         assert counts.picks_correct == counts.picks_expected, case.name
         assert counts.picks_offered == counts.picks_expected, case.name
         assert counts.picks_wrong == 0 and counts.picks_rejected == 0, case.name
+    assert row.counts.qualified_checked == 6
     recast = sum(case.counts.recast_vertices for case in row.cases)
     assert recast > 0
     assert row.counts.forbidden_expected > 0
@@ -254,8 +268,8 @@ async def test_a_re_cast_that_renames_a_ref_duplicates_an_assigned_vertex(make_c
     one, _ = await _cast_one(case, source_id, client_a)
     two, _ = await _cast_one(case, source_id, client_b)
     counts = score_recast(one, two, case.schema_)
-    # The mentioned machine is written by its key, so the re-cast adds nothing.
-    assert counts.recast_vertices == 3
+    # The mentioned machine is a reference: no store holds it from these casts.
+    assert counts.recast_vertices == 2
     assert counts.recast_added == 0
     assert counts.recast_minted == 1
     assert counts.recast_duplicated == 1
@@ -275,6 +289,52 @@ async def test_a_keyless_vertex_matches_by_its_properties(make_client):
     assert counts.entities_matched == 2
     assert counts.edges_matched == 1
     assert counts.spans_hit == counts.spans_checked - 1
+
+
+async def test_a_cast_that_drops_its_qualifiers_disagrees_on_each(make_client):
+    case = BY_NAME["qualifiers/helpdesk"]
+    for source_id in ("qualifiers-helpdesk-1", "qualifiers-helpdesk-3"):
+        reply = _expected_reply(case, source_id)
+        for item in [
+            *reply["edges"],
+            *(p for v in reply["vertices"] for p in v["props"]),
+        ]:
+            item.update(when=None, modality="actual", negated=False)
+        client, _ = make_client(reply)
+        outcome, episode = await _cast_one(case, source_id, client)
+        counts = score_episode(
+            outcome, case.expected[source_id], case.schema_, episode.text
+        )
+        assert (counts.qualified_checked, counts.qualified_agree) == (1, 0)
+        assert case_score(counts) == 1.0
+
+
+async def test_a_resolved_time_matches_by_day_at_day_precision(make_client):
+    case = BY_NAME["qualifiers/helpdesk"]
+    source_id = "qualifiers-helpdesk-2"
+    reply = _expected_reply(case, source_id)
+    reply["edges"][0]["when"].update(
+        start="2026-10-16T08:00:00+00:00", end="2026-10-16T12:00:00+00:00"
+    )
+    client, _ = make_client(reply)
+    outcome, episode = await _cast_one(case, source_id, client)
+    counts = score_episode(
+        outcome, case.expected[source_id], case.schema_, episode.text
+    )
+    assert (counts.qualified_checked, counts.qualified_agree) == (1, 1)
+
+
+async def test_a_denied_edge_is_scored_but_never_written(make_client):
+    case = BY_NAME["qualifiers/logistics"]
+    source_id = "qualifiers-logistics-1"
+    client, _ = make_client(_expected_reply(case, source_id))
+    outcome, episode = await _cast_one(case, source_id, client)
+    counts = score_episode(
+        outcome, case.expected[source_id], case.schema_, episode.text
+    )
+    assert counts.edges_matched == 2
+    assert outcome.graph is not None and len(outcome.graph.relations) == 1
+    assert [g.negated for g in outcome.groundings if g.kind == "edge"] == [False, True]
 
 
 def test_the_command_writes_both_reports(tmp_path: Path):
@@ -323,17 +383,21 @@ def test_a_replay_miss_stops_the_run(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 
 def test_a_pick_is_scored_by_what_it_links():
-    from graflo.link.records import EntityCandidate
+    from graflo.link.records import CandidateHit, EntityCandidate
 
     from schemacast.bench.score import score_picks
     from schemacast.pick import Pick
 
     spec = BY_NAME["mention/logistics"].picks["mention-logistics-1"]
     kari = EntityCandidate(
-        vertex_type="Driver", key={"license": "L-5210"}, lane="relation"
+        vertex_type="Driver",
+        key={"license": "L-5210"},
+        lanes=[CandidateHit(lane="relation", relation="DRIVES_FOR", anchor="d")],
     )
     ola = EntityCandidate(
-        vertex_type="Driver", key={"license": "L-4471"}, lane="metadata"
+        vertex_type="Driver",
+        key={"license": "L-4471"},
+        lanes=[CandidateHit(lane="metadata", role="subject")],
     )
 
     def _counts(outcome, candidate=None):

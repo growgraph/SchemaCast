@@ -5,7 +5,7 @@
 | ``mentions.jsonl`` | one graflo ``RecordGraph`` per episode: what each text names | yes |
 | ``graph.json`` | the schema and what the records' keys identify (graflo ``GraFloOutput``) | yes |
 | ``staged.jsonl`` | records not identified, with why, and the relations they hold | yes |
-| ``groundings.jsonl`` | one grounding per record, relation and property | yes |
+| ``groundings.jsonl`` | one grounding per record, relation and property, denials included | yes |
 | ``episodes.jsonl`` | one result per episode | yes |
 | ``quarantine.jsonl`` | what was left out, and ``unmapped`` items | yes |
 | ``manifest.json`` | versions, settings, counts and usage | no: usage differs |
@@ -15,8 +15,11 @@ A pick (``save_picks``) writes ``picks.jsonl`` (one pick per staged record),
 ``episodes.jsonl`` and ``manifest.json`` to its own directory.
 
 With a database, ``staged.jsonl`` holds what is still staged after the lookups
-there. ``manifest.json`` names the ``output_format_version``. Version 6: a cast
+there. ``manifest.json`` names the ``output_format_version``. Version 7: a cast
 is a record graph, quotes and spans in ``evidence``; ``unmapped`` is outside it.
+A relation's or property's ``evidence`` may hold ``when``, ``modality`` and
+``negated``; a denied relation or property is in no record graph, only in
+``groundings.jsonl`` (``negated: true``, with the value for a property).
 A record of a known entity (ref ``k1``…) has ``evidence`` ``{"known": role,
 "label": label}`` and no quote or span, and no grounding.
 """

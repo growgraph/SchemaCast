@@ -4,10 +4,15 @@ The reply is parsed into the wire models below and nothing more. Whether a
 type exists, a property belongs to its vertex, a value fits its field or a
 quote is in the text are checked afterwards; the wire models only make sure
 the reply has the flat shape.
+
+Every edge and property may carry three qualifiers: ``when`` (the time the
+text says it holds), ``modality`` and ``negated``. Left out, they read as no
+time, ``actual`` and false.
 """
 
 from __future__ import annotations
 
+import copy
 import math
 from typing import Any
 
@@ -16,6 +21,7 @@ from graflo.architecture.schema.document import Schema
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from schemacast.episode import Episode
+from schemacast.ground import GRANULARITIES, MODALITIES
 from schemacast.llm.client import JsonCompletion, LLMClient
 from schemacast.prompt import build_messages
 
@@ -27,10 +33,30 @@ CHARS_PER_TOKEN = 4
 Scalar = str | int | float | bool
 
 
-class WireProp(BaseModel):
-    """A property the model read: name, value as written, and its quote."""
+class WireWhen(BaseModel):
+    """The time an edge or property holds: the phrase, and the interval the
+    model resolved it to. Checked by validation, not here."""
 
     model_config = ConfigDict(extra="ignore")
+
+    quote: str = ""
+    start: str | None = None
+    end: str | None = None
+    granularity: str | None = None
+
+
+class WireQualified(BaseModel):
+    """The qualifiers an edge or a property may carry; null reads as the default."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    when: WireWhen | None = None
+    modality: str | None = None
+    negated: bool | None = None
+
+
+class WireProp(WireQualified):
+    """A property the model read: name, value as written, and its quote."""
 
     name: str
     value: Scalar | list[Scalar]
@@ -49,7 +75,7 @@ class WireVertex(BaseModel):
     props: list[WireProp] = Field(default_factory=list)
 
 
-class WireEdge(BaseModel):
+class WireEdge(WireQualified):
     """An edge the model read, between two refs."""
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
@@ -112,9 +138,50 @@ class WireShapeError(ValueError):
         self.content = content
 
 
+#: The qualifiers as JSON Schema: every key required, so strict output accepts it.
+QUALIFIER_SHAPE: dict[str, Any] = {
+    "when": {
+        "anyOf": [
+            {
+                "type": "object",
+                "properties": {
+                    "quote": {"type": "string"},
+                    "start": {"type": "string"},
+                    "end": {"type": ["string", "null"]},
+                    "granularity": {"type": "string", "enum": list(GRANULARITIES)},
+                },
+                "required": ["quote", "start", "end", "granularity"],
+                "additionalProperties": False,
+            },
+            {"type": "null"},
+        ]
+    },
+    "modality": {"type": "string", "enum": list(MODALITIES)},
+    "negated": {"type": "boolean"},
+}
+
+
+def _qualify(item: dict[str, Any]) -> None:
+    """Add the qualifiers to a closed object schema, right after its ``quote``."""
+    properties: dict[str, Any] = {}
+    for key, value in item["properties"].items():
+        properties[key] = value
+        if key == "quote":
+            properties.update(copy.deepcopy(QUALIFIER_SHAPE))
+    item["properties"] = properties
+    item["required"] = list(properties)
+
+
 def episode_shape(slice_: Schema) -> dict[str, Any]:
-    """The JSON Schema one extraction or repair call against *slice_* is held to."""
-    return instance_json_schema(slice_)
+    """The JSON Schema one extraction or repair call against *slice_* is held
+    to: graflo's instance shape, with the qualifiers on every edge and property."""
+    shape = copy.deepcopy(instance_json_schema(slice_))
+    vertex = shape["properties"]["vertices"]["items"]
+    edge = shape["properties"]["edges"]["items"]
+    for item in (edge, edge["properties"]["props"]["items"]):
+        _qualify(item)
+    _qualify(vertex["properties"]["props"]["items"])
+    return shape
 
 
 def estimate_episode_tokens(episode: Episode) -> int:
@@ -144,7 +211,11 @@ async def extract(
             raise EpisodeTooLongError(episode.source_id, estimated, max_episode_tokens)
     messages = build_messages(slice_, episode, user_instruction=user_instruction)
     completion = await client.acomplete_json(
-        messages, episode_shape(slice_), schema_name=INSTANCE_SCHEMA_NAME
+        messages,
+        episode_shape(slice_),
+        schema_name=INSTANCE_SCHEMA_NAME,
+        stage="cast",
+        source_id=episode.source_id,
     )
     try:
         wire = WireExtraction.model_validate(completion.data)

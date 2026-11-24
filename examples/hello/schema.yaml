@@ -1,0 +1,20 @@
+# Companies, who runs them, and who bought whom.
+name: deals
+version: 1.0.0
+types:
+    Company:
+        about: A company.
+        aka: [firm]
+        key: name
+        fields: {name: str, sector: str, city: str}
+    Person:
+        about: A person.
+        key: name
+        fields: {name: str}
+relations:
+-   Person CEO_OF Company
+-   from: Company
+    name: ACQUIRED
+    to: Company
+    fields:
+        price: {type: float, unit: USD, about: Price paid in US dollars.}

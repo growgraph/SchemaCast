@@ -26,7 +26,8 @@ import hmac
 from importlib.metadata import version
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 from graflo.link.records import RecordGraph, Staged
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -70,7 +71,8 @@ class CastResponse(BaseModel):
         description=(
             "One graflo ``RecordGraph`` per episode cast: what to resolve and "
             "write. Each record, relation and property carries its quote and "
-            "span in ``evidence``."
+            "span in ``evidence``, and its qualifiers when set. What the text "
+            "denies is left out and is in ``groundings`` only."
         )
     )
     graph: dict[str, Any] = Field(
@@ -136,6 +138,14 @@ def create_app(
     shared = client or LLMClient(settings.llm, LLMCache(settings.cache))
     app = FastAPI(title="SchemaCast", version=__version__)
 
+    @app.exception_handler(CacheMissError)
+    async def cache_miss(_: Request, error: Exception) -> JSONResponse:
+        """409: the cache requires hits; ``miss`` says what changed."""
+        assert isinstance(error, CacheMissError)
+        return JSONResponse(
+            status_code=409, content={"detail": str(error), "miss": error.as_dict()}
+        )
+
     def require_key(
         authorization: Annotated[str | None, Header()] = None,
     ) -> None:
@@ -181,8 +191,6 @@ def create_app(
             result = await caster.cast(request.episodes)
         except LLMConfigurationError as error:
             raise HTTPException(503, f"The model is misconfigured: {error}") from error
-        except CacheMissError as error:
-            raise HTTPException(409, str(error)) from error
         return CastResponse(
             mentions=result.graphs,
             graph=result.output.to_dict(),
@@ -208,8 +216,6 @@ def create_app(
             return await picker.pick(request.episodes)
         except LLMConfigurationError as error:
             raise HTTPException(503, f"The model is misconfigured: {error}") from error
-        except CacheMissError as error:
-            raise HTTPException(409, str(error)) from error
 
     return app
 

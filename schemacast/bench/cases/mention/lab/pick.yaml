@@ -6,7 +6,9 @@ mention-lab-1:
         key:
             email: mira@lab.example
         label: Mira Olsen
-        role: speaker
+        lanes:
+        -   lane: metadata
+            role: speaker
     mentions:
         r:
             candidates:
@@ -14,7 +16,8 @@ mention-lab-1:
                 key:
                     email: tomas@lab.example
                 label: Tomas Ek
-                lane: relation
-                relation: LEADS
-                anchor: p
+                lanes:
+                -   lane: relation
+                    relation: LEADS
+                    anchor: p
             pick:

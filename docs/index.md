@@ -9,18 +9,17 @@ hide:
 
 # SchemaCast
 
-SchemaCast reads short texts — messages, tickets, notes — and writes what they
-state as a labeled property graph, typed by a GraFlo schema you govern.
+Turn text into a knowledge graph. You say what to look for, in a few lines of
+YAML; every fact keeps the words it came from.
 { .lc-lead }
 
-Each text gets one model call, checked against the schema. What fails a check
-is corrected at most twice, then quarantined, never guessed. Every vertex, edge
-and property keeps the quote it was read from.
-
-It is for teams that already have a schema and want text to land in it.
+SchemaCast reads short texts (news, messages, notes, tickets) and writes the
+entities, how they relate and what is said about them. Each text is one model
+call, checked against your schema, so what lands in the graph has the shape you
+asked for.
 
 ```bash
-uv add schemacast
+pip install schemacast
 ```
 
 [Quick start](getting_started/quickstart.md){ .md-button .md-button--primary }
@@ -64,11 +63,11 @@ uv add schemacast
 <circle class="lc-cast__vertex" cx="364" cy="142" r="21"/>
 <circle class="lc-cast__vertex" cx="280" cy="206" r="14"/>
 <text class="lc-cast__label" x="280" y="46" text-anchor="middle">Person</text>
-<text class="lc-cast__label" x="392" y="114" text-anchor="middle">Machine</text>
-<text class="lc-cast__label" x="280" y="236" text-anchor="middle">Sensor</text>
-<text class="lc-cast__small" x="330" y="92" text-anchor="start">OPERATES</text>
-<text class="lc-cast__small" x="326" y="212" text-anchor="start">MOUNTED_ON</text>
-<text class="lc-cast__small" x="364" y="182" text-anchor="middle">power 37.5</text>
+<text class="lc-cast__label" x="392" y="114" text-anchor="middle">Company</text>
+<text class="lc-cast__label" x="280" y="236" text-anchor="middle">Company</text>
+<text class="lc-cast__small" x="330" y="92" text-anchor="start">CEO_OF</text>
+<text class="lc-cast__small" x="326" y="212" text-anchor="start">ACQUIRED</text>
+<text class="lc-cast__small" x="364" y="182" text-anchor="middle">city Austin</text>
 <text class="lc-cast__caption" x="329" y="262" text-anchor="middle">Typed by the schema</text>
 </svg>
 </figure>
@@ -77,6 +76,54 @@ uv add schemacast
 !!! note "Early development"
     SchemaCast is on PyPI (`pip install schemacast`) and its API may still change; see
     [Installation](getting_started/installation.md).
+
+## In three steps
+
+<div class="lc-columns" markdown>
+<div markdown>
+
+### 1. Install
+
+```bash
+pip install schemacast
+```
+
+</div>
+<div markdown>
+
+### 2. Say what to look for
+
+```yaml
+name: deals
+types:
+  Company:
+    key: name
+    fields: {name: str, city: str}
+  Person:
+    key: name
+    fields: {name: str}
+relations:
+- Person CEO_OF Company
+- Company ACQUIRED Company
+```
+
+</div>
+<div markdown>
+
+### 3. Cast your texts
+
+```bash
+schemacast cast --schema schema.yaml \
+    --episodes notes.jsonl --out out/
+```
+
+One text per line in `notes.jsonl`; out comes the graph, with the quote behind
+every fact.
+
+</div>
+</div>
+
+[See it run, no key needed](getting_started/quickstart.md){ .md-button .md-button--primary }
 
 ## What it does
 
@@ -97,7 +144,7 @@ correction, at most twice.
 
 A text's mentions are resolved by their keys, never guessed: a complete key
 identifies an entity, an alternate key looks one up, and anything less waits,
-staged with its reason. Writing a cast twice leaves a database that upserts
+staged with its reason. Only a text that introduces an entity creates it. Writing a cast twice leaves a database that upserts
 unchanged.
 
 </div>
@@ -105,9 +152,10 @@ unchanged.
 
 ### Grounded and replayable
 
-Every assertion carries its source, character span and quote. Replies are
-cached by request, so a replay makes no request and reproduces the graph byte
-for byte.
+Every assertion carries its source, character span and quote, and what the
+text says about it: when it holds, whether it is planned or hedged, and what
+the text denies. Replies are cached by request, so a replay makes no request
+and reproduces the graph byte for byte.
 
 </div>
 </div>
@@ -122,7 +170,7 @@ for byte.
 
 -   **[Quick start](getting_started/quickstart.md)**
 
-    Cast five support tickets into a schema.
+    Five news notes about companies and deals, cast in three steps.
 
 -   **[How a cast works](concepts/index.md)**
 

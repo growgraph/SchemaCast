@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.0]
+## [Unreleased]
+
+## [0.4.0] - 2026-11-24
 
 ### Added
 
@@ -13,47 +15,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`gather_candidates`) and to the entities its metadata names, in one call: per mention, a
   candidate id from an enum or `none`, checked without a model. `schemacast pick`, `POST /pick`,
   `Picker`, `apply_picks` (a pick links, never writes); cached and replayable like the cast.
+  Each candidate is shown with every lane that found it and graflo's graded attributes; only a
+  conflict counts against it. At most four candidates per mention (`MAX_OFFERED`) plus `none`.
 - **Known entities**: `Episode.known` (`KnownEntity`: `vertex_type`, `key`, `role`, `label`) names
   records the text belongs to. Their types are pinned into the slice, they are shown in a `# KNOWN`
   block as refs `k1`…, and an edge may end at one; restating one is a `known_ref` finding. A used
-  one is a record (`Validation.known`) stating its key from the source, with no grounding.
-- Bench corpus 1.3.0: the `known` family; edges in `expected.yaml` may end at `k1`….
-- Bench corpus 1.2.0: `pick.yaml` in the `mention` family, scored as *Pick* (correct, wrong links,
-  rejected).
-- `schemacast-bench --corpus DIR` runs a corpus of your own (never publishable);
-  `schemacast-bench score CASTS…` scores saved `POST /cast` bodies with no model. Reports list
-  every unmatched expected and produced item per episode; `expected.yaml` takes `allowed` items.
-- **`cast` exit status by cause:** 0 when every failure is about the episode itself, 75 when some
+  one is a record stating its key from the source, with no grounding.
+- Mentions, candidates, known entities and pinned types are numbered in a canonical order, so the
+  caller's order never changes a request or its cache key.
+- **Qualifiers** on every relation and property of the reply: `when` (`quote`, ISO 8601 `start` /
+  `end`, `granularity`), `modality` (`actual`, `planned`, `hedged`) and `negated`. Checked,
+  repaired (`invalid_qualifier`) and carried in `evidence` and on `Grounding`; a denied item is
+  grounded but left out of the record graph.
+- **`keys_apart` finding**: a vertex's complete keys must be stated in one sentence, so one record
+  never claims two entities are one.
+- Each cached reply keeps its request beside it (`llm/<key>.request.json`). A miss under
+  `require_hit` names the nearest stored request of its stage and a diff; `serve` returns them in
+  its 409 body (`miss`).
+- **`cast` exit status by cause**: 0 when every failure is about the episode itself, 75 when some
   episodes failed at the provider (a rerun retries them), 1 when the run stopped or every episode
-  failed. The summary names failures by kind.
+  failed.
+- Bench corpus 1.6.0: families `known` and `qualifiers`, `pick.yaml` in the `mention` family
+  (scored as *Pick*) and the `qualifier_accuracy` rate. `schemacast-bench --corpus DIR` runs a
+  corpus of your own; `schemacast-bench score CASTS…` scores saved `POST /cast` bodies with no
+  model; reports list every unmatched item per episode; `expected.yaml` takes `allowed` items.
+- **Compact schema notation** (optional): graflo's short YAML form (`types`, `key`, `alt_keys`,
+  `fields`, `relations` as `"A REL B"`, `graflo.interop.compact`) is read as the GraFlo schema it
+  stands for wherever a schema is taken. `schemacast schema --to graflo|compact` converts, and
+  refuses what the notation cannot express.
+- **Neutral bundle** (optional): `cast --bundle` (`save_bundle`) also writes `bundle/`: nodes,
+  edges, groundings and staged mentions as plain JSON Lines with stable ids, the schema, and
+  `neutral.schema.json` describing every line. The GraFlo files are written as before.
+- `examples/hello`: five news notes about companies and deals in a compact schema, with recorded
+  replies, so `uv run python examples/hello/demo.py` runs with no key; the README and quick start
+  lead with it.
+- `examples/tickets`: a text about a known ticket, a text with a denial, a planned date and a
+  hedged value, and `pick.jsonl`.
 
 ### Changed
 
-- Requires graflo ≥ 1.21.0: mention graphs, resolution and candidates come from `graflo.link`.
-- **A cast is a mention graph.** Each episode yields its mentions (type, stated properties,
-  spans), the relations between them and `unmapped`; graflo resolves them by keys
-  (`resolve_mentions`): a complete primary key, or a secondary identity matching one entity in the
-  batch or, with `--db`, the database. The rest is staged with a reason in `staged.jsonl`, with
-  the relations waiting on it. A mention's stated properties are written when it resolves.
-- **Partial keys never identify**; a composite or digest key counts only when complete.
+- Requires graflo ≥ 1.27.5: record graphs, resolution, candidates and graded attributes come from
+  `graflo.link`, the compact notation from `graflo.interop.compact`.
+- **A cast is a mention graph.** Each episode yields graflo `RecordGraph`s (mentions with their
+  stated properties, relations, quotes and spans in `evidence`) and `unmapped`; graflo resolves
+  them by keys (`resolve_records`), within the batch or, with `--db`, the database. The rest is
+  staged with a reason in `staged.jsonl`, with the relations waiting on it.
+- **Only a text that introduces an entity creates it**: a mention with a complete key links to an
+  entity another text or the database holds, and otherwise stays staged as `unmatched`. Partial
+  keys never identify; a composite or digest key counts only when complete.
 - **Connector-owned types**: given a manifest, a type a connector ingests is linked, never created
   or written from text.
-- Output format version 4: `mentions.jsonl` and `staged.jsonl` replace `pending.jsonl` and
-  `unresolved.jsonl`; groundings name mention refs (`ref`, `source_ref`, `target_ref`) instead of
-  identities; `POST /cast` returns `mentions` and `staged`; `write_cast` returns the database's
-  resolution with the report.
-- Output format version 6: a record of a known entity has `evidence` `{"known", "label"}` and no
-  quote or span; `EpisodeResult.known` counts them. A new extraction rule keeps an entity the text
-  names without its key, so replies cached before it are not reused.
-- Output format version 5, on graflo's record API (`graflo.link`): `mentions` (file and `POST /cast`)
-  are graflo `RecordGraph`s with each quote and span in `evidence`; `staged` holds `StagedRecord`s
-  and `/pick` takes `StagedCandidates` with `record`; `unmapped` is SchemaCast's, per episode.
-- `identity_insufficient` no longer removes the mention: it asks one repair for a key the reply may
-  have left out.
+- Output format version 7 (was 2): `mentions.jsonl` and `staged.jsonl` replace `pending.jsonl` and
+  `unresolved.jsonl`; groundings name mention refs (`ref`, `source_ref`, `target_ref`) and carry
+  qualifiers; a known entity's record has `evidence` `{"known", "label"}`; `POST /cast` returns
+  `mentions` and `staged`; `write_cast` returns the database's resolution with the report.
+- `identity_insufficient` asks one repair for a key the reply may have left out instead of removing
+  the mention.
 - An endpoint that no request of the run has reached stops the run as a configuration error.
-- The prompt labels the reference time as not part of the text and says every quote comes from
-  inside a delimited block; an `unmapped` entry whose quote is not in the text is dropped.
-- `examples/tickets`: `title` and `wait` carry descriptions.
+- The prompt labels the reference time as not part of the text; an `unmapped` entry whose quote is
+  not in the text is dropped. Replies cached by 0.3.0 are not reused.
+- The PyPI homepage, the README and the docs footer link to growgraph.dev.
+- A schema file that does not load is one error message naming the bad part, not a traceback.
+
+## [0.3.0] - 2026-10-18
+
+### Changed
+
 - **Renamed from `lpgcast` to `schemacast`**: the distribution, the import package, the CLI
   (`schemacast`, `schemacast-bench`), `SchemaCaster` and `SchemaCastSettings`, the
   `SCHEMACAST_` environment prefixes and the default cache directory. The `text2lpg` alias is gone.

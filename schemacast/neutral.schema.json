@@ -1,0 +1,227 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://growgraph.github.io/SchemaCast/neutral.schema.json",
+    "title": "SchemaCast neutral bundle, format 1",
+    "description": "One line of nodes.jsonl, edges.jsonl, groundings.jsonl or staged.jsonl, and bundle.json, each under its $defs entry.",
+    "$defs": {
+        "id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{32}$"
+        },
+        "endpoint": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string"
+                },
+                "id": {
+                    "$ref": "#/$defs/id"
+                }
+            },
+            "required": [
+                "type",
+                "id"
+            ],
+            "additionalProperties": false
+        },
+        "node": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "$ref": "#/$defs/id"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "key": {
+                    "type": "object",
+                    "minProperties": 1
+                },
+                "properties": {
+                    "type": "object"
+                }
+            },
+            "required": [
+                "id",
+                "type",
+                "key",
+                "properties"
+            ],
+            "additionalProperties": false
+        },
+        "edge": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "$ref": "#/$defs/id"
+                },
+                "relation": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "source": {
+                    "$ref": "#/$defs/endpoint"
+                },
+                "target": {
+                    "$ref": "#/$defs/endpoint"
+                },
+                "properties": {
+                    "type": "object"
+                }
+            },
+            "required": [
+                "id",
+                "relation",
+                "source",
+                "target",
+                "properties"
+            ],
+            "additionalProperties": false
+        },
+        "grounding": {
+            "type": "object",
+            "properties": {
+                "source_id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "enum": [
+                        "vertex",
+                        "edge",
+                        "property"
+                    ]
+                },
+                "node_id": {
+                    "$ref": "#/$defs/id"
+                },
+                "edge_id": {
+                    "$ref": "#/$defs/id"
+                },
+                "edge": {
+                    "type": "array",
+                    "items": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                },
+                "staged": {
+                    "const": true
+                },
+                "char_start": {
+                    "type": "integer"
+                },
+                "char_end": {
+                    "type": "integer"
+                },
+                "quote": {
+                    "type": "string"
+                },
+                "modality": {
+                    "enum": [
+                        "actual",
+                        "planned",
+                        "hedged"
+                    ]
+                },
+                "negated": {
+                    "type": "boolean"
+                }
+            },
+            "required": [
+                "source_id",
+                "kind",
+                "char_start",
+                "char_end",
+                "quote"
+            ]
+        },
+        "staged": {
+            "type": "object",
+            "properties": {
+                "source_id": {
+                    "type": "string"
+                },
+                "ref": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "stated": {
+                    "type": "object"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "source_id",
+                "ref",
+                "type",
+                "stated",
+                "reason"
+            ],
+            "additionalProperties": false
+        },
+        "bundle": {
+            "type": "object",
+            "properties": {
+                "bundle_format_version": {
+                    "const": 1
+                },
+                "producer": {
+                    "type": "object",
+                    "properties": {
+                        "schemacast": {
+                            "type": "string"
+                        },
+                        "graflo": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "schemacast",
+                        "graflo"
+                    ]
+                },
+                "schema_ref": {
+                    "type": "string"
+                },
+                "schema_notation": {
+                    "enum": [
+                        "compact",
+                        "graflo"
+                    ]
+                },
+                "counts": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer",
+                        "minimum": 0
+                    }
+                },
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            },
+            "required": [
+                "bundle_format_version",
+                "producer",
+                "schema_ref",
+                "schema_notation",
+                "counts",
+                "files"
+            ],
+            "additionalProperties": false
+        }
+    }
+}

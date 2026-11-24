@@ -10,6 +10,10 @@ ignoring case and runs of whitespace. An expected edge may end at a known
 entity by its ref (``k1``…); it matches by ref, and known entities are not
 counted as entities.
 
+Qualifiers are scored on matched edges and properties where either side
+carries one: modality and negation must be equal, and ``start`` and ``end``
+equal at the expected value's precision (a date compares by day).
+
 Every figure is a pair of integer counts, so cases pool by summing and a rate
 is read off the pooled counts.
 """
@@ -18,6 +22,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Any
 
 from graflo.architecture.schema.coerce import coerce_value
@@ -36,10 +41,20 @@ from schemacast.bench.corpus import (
     ExpectedGraph,
     ExpectedPicks,
     ExpectedProp,
+    ExpectedQualifiers,
 )
 from schemacast.cast import EpisodeOutcome
 from schemacast.episode import KnownEntity
-from schemacast.ground import Span, locate, quote_of, span_of
+from schemacast.ground import (
+    Span,
+    locate,
+    modality_of,
+    negated_of,
+    parse_iso,
+    quote_of,
+    span_of,
+    when_of,
+)
 from schemacast.llm.usage import UsageTracker
 from schemacast.pick import Pick
 from schemacast.prompt import known_refs
@@ -84,6 +99,8 @@ class Counts(BaseModel):
     props_matched: int = 0
     spans_checked: int = 0
     spans_hit: int = 0
+    qualified_checked: int = 0
+    qualified_agree: int = 0
     forbidden_expected: int = 0
     forbidden_written: int = 0
     # Selection, read apart from extraction.
@@ -158,6 +175,61 @@ def _spans(evidence: dict[str, Any] | None) -> list[Span]:
     return [] if span is None else [span]
 
 
+#: Modality, negated, start and end of an edge or property.
+Qualifiers = tuple[str, bool, str | None, str | None]
+_PLAIN: Qualifiers = ("actual", False, None, None)
+
+
+def _qualifiers(evidence: dict[str, Any] | None) -> Qualifiers:
+    when = when_of(evidence)
+    return (
+        modality_of(evidence),
+        negated_of(evidence),
+        when.start if when is not None else None,
+        when.end if when is not None else None,
+    )
+
+
+def _expected_qualifiers(item: ExpectedQualifiers) -> Qualifiers:
+    when = item.when
+    return (
+        item.modality,
+        item.negated,
+        when.start if when is not None else None,
+        when.end if when is not None else None,
+    )
+
+
+def _same_time(expected: str | None, produced: str | None) -> bool:
+    """Equal at *expected*'s precision: a date compares by day."""
+    if expected is None or produced is None:
+        return expected is None and produced is None
+    want, got = parse_iso(expected), parse_iso(produced)
+    if want is None or got is None:
+        return False
+    if not isinstance(want, datetime):
+        return (got.date() if isinstance(got, datetime) else got) == want
+    if not isinstance(got, datetime):
+        return False
+    if (want.tzinfo is None) != (got.tzinfo is None):
+        want, got = want.replace(tzinfo=None), got.replace(tzinfo=None)
+    return want == got
+
+
+def _score_qualifiers(
+    counts: Counts, expected: Qualifiers, produced: Qualifiers | None
+) -> None:
+    produced = produced or _PLAIN
+    if expected == _PLAIN and produced == _PLAIN:
+        return
+    counts.qualified_checked += 1
+    counts.qualified_agree += (
+        expected[:2] == produced[:2]
+        and _same_time(expected[2], produced[2])
+        and _same_time(expected[3], produced[3])
+    )
+
+
 def identity_keys(vertex: Vertex, props: dict[str, Any]) -> list[tuple[Any, ...]]:
     """Every key *props* complete: the primary first, then secondaries."""
     contract = key_contract(vertex)
@@ -177,6 +249,7 @@ class _Gold(BaseModel):
     props: dict[str, Any]
     span: Span | None
     prop_spans: dict[str, Span]
+    prop_qualifiers: dict[str, Qualifiers]
 
 
 class _Entity(BaseModel):
@@ -187,6 +260,7 @@ class _Entity(BaseModel):
     spans: list[Span] = []
     quotes: list[str] = []
     prop_spans: dict[str, list[Span]] = {}
+    prop_qualifiers: dict[str, Qualifiers] = {}
 
 
 class Misses(BaseModel):
@@ -276,6 +350,9 @@ def gold_vertices(
             props=props,
             span=locate(item.quote, text),
             prop_spans=_prop_spans(item.props, text, context),
+            prop_qualifiers={
+                name: _expected_qualifiers(prop) for name, prop in item.props.items()
+            },
         )
     return out
 
@@ -310,6 +387,7 @@ def _entities(
             entity.quotes.append(quote)
         for name, prop in valid.props.items():
             entity.prop_spans.setdefault(name, []).extend(_spans(prop.evidence))
+            entity.prop_qualifiers.setdefault(name, _qualifiers(prop.evidence))
         ref_index[valid.ref] = index
     return entities, ref_index
 
@@ -371,12 +449,17 @@ def _score_props(
     produced: dict[str, Any],
     gold_spans: dict[str, Span],
     spans: dict[str, list[Span]],
+    gold_qualifiers: dict[str, Qualifiers],
+    qualifiers: dict[str, Qualifiers],
 ) -> None:
     counts.props_expected += len(expected)
     counts.props_produced += len(produced)
     for name, value in expected.items():
         if name in produced and _same(produced[name], value):
             counts.props_matched += 1
+            _score_qualifiers(
+                counts, gold_qualifiers.get(name, _PLAIN), qualifiers.get(name)
+            )
             if name in gold_spans:
                 counts.spans_checked += 1
                 counts.spans_hit += any(
@@ -541,7 +624,13 @@ def score_episode(
             counts.spans_checked += 1
             counts.spans_hit += any(_overlap(s, item.span) for s in entity.spans)
         _score_props(
-            counts, item.props, entity.props, item.prop_spans, entity.prop_spans
+            counts,
+            item.props,
+            entity.props,
+            item.prop_spans,
+            entity.prop_spans,
+            item.prop_qualifiers,
+            entity.prop_qualifiers,
         )
     for handle, item in gold.items():
         if handle not in pairs.values():
@@ -566,17 +655,30 @@ def score_episode(
         tuple[Any, ...], tuple[dict[str, Any], list[Span], dict[str, list[Span]]]
     ] = {}
     edge_quotes: dict[tuple[Any, ...], str | None] = {}
+    edge_qualifiers: dict[tuple[Any, ...], Qualifiers] = {}
+    prop_qualifiers: dict[tuple[Any, ...], dict[str, Qualifiers]] = {}
     for valid in validation.relations:
         key = (valid.edge_id[2], node(valid.source), node(valid.target))
         props, spans, prop_spans = produced.setdefault(key, ({}, [], {}))
         edge_quotes.setdefault(key, quote_of(valid.evidence))
+        edge_qualifiers.setdefault(key, _qualifiers(valid.evidence))
         props.update({k: v for k, v in valid.values().items() if k not in props})
         spans.extend(_spans(valid.evidence))
         for name, prop in valid.props.items():
             prop_spans.setdefault(name, []).extend(_spans(prop.evidence))
+            prop_qualifiers.setdefault(key, {}).setdefault(
+                name, _qualifiers(prop.evidence)
+            )
     by_handles = {
         (relation, handle(src), handle(tgt)): value
         for (relation, src, tgt), value in produced.items()
+    }
+    qualifiers_by_handles = {
+        (relation, handle(src), handle(tgt)): (
+            edge_qualifiers[(relation, src, tgt)],
+            prop_qualifiers.get((relation, src, tgt), {}),
+        )
+        for relation, src, tgt in produced
     }
     allowed_edges = {
         (edge.relation, edge.from_, edge.to) for edge in expected.allowed.edges
@@ -603,7 +705,11 @@ def score_episode(
             continue
         matched_edges.add(number)
         props, spans, prop_spans = forward
+        qualified, prop_qualified = qualifiers_by_handles[
+            (edge.relation, edge.from_, edge.to)
+        ]
         counts.edges_matched += 1
+        _score_qualifiers(counts, _expected_qualifiers(edge), qualified)
         span = locate(edge.quote, text)
         if span is not None:
             counts.spans_checked += 1
@@ -614,6 +720,8 @@ def score_episode(
             props,
             _prop_spans(edge.props, text, context),
             prop_spans,
+            {name: _expected_qualifiers(prop) for name, prop in edge.props.items()},
+            prop_qualified,
         )
     counts.forbidden_written += sum(
         (edge.relation, edge.from_, edge.to) in by_handles

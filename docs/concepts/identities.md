@@ -38,7 +38,7 @@ The first rule that holds decides:
 
 | The mention states | Outcome |
 |---|---|
-| a complete primary key | resolved: written with the properties the text states |
+| a complete primary key | resolved, and written with the properties the text states, when the text introduces the entity or another text or the database holds it; otherwise staged as `unmatched` |
 | a complete alternate key | looked up, first among the batch's resolved mentions, then in the database: exactly one entity resolves it; several stage it as `ambiguous`, none as `unmatched` |
 | nothing, and its type is minted | minted when the text introduces the entity; staged as `keyless_reference` when it only refers to one |
 | part of a key | staged as `partial_key` |
@@ -46,8 +46,9 @@ The first rule that holds decides:
 
 A relation follows its endpoints: written when both resolve, otherwise held
 with the staged mention it waits on. A mention's `may_create` (the model's
-`mention: false`) matters only for a minted type; for every other type the key
-decides.
+`mention: false`) decides whether the text may create its entity: only a text
+that introduces an entity creates it, keyed or minted. A text that only refers
+to one links to it once another text or the database holds it.
 
 **Partial keys never identify.** Nothing merges two vertices later, so a
 guessed identity would stay a duplicate. A staged mention keeps what the text
@@ -78,7 +79,7 @@ The five texts of `examples/tickets`, and where their mentions go:
 | mail-1042 | Ticket HD-4415, HD-4411 | resolved by key; `DUPLICATE_OF` written |
 | mail-1042 | Customer with email jo.park@example.com | `unmatched` until an entity with that email exists; `RAISED` held |
 | note-88 | Comment | minted; `ON` HD-4411 written |
-| note-88 | Ticket HD-4411 (referred to) | resolved by key; its stated `wait` is written |
+| note-88 | Ticket HD-4411 (referred to) | resolved by key to mail-1041's ticket; its stated `wait` is written |
 | chat-2210 | none | an instruction, not a statement |
 
 ## Re-casting

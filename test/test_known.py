@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 from conftest import DATA
 from graflo.link.records import (
+    CandidateHit,
     EntityCandidate,
     PartialRecord,
     RecordGraph,
@@ -247,11 +248,13 @@ async def test_a_cast_relates_to_a_known_entity_without_grounding_it(
     assert "# KNOWN" in endpoint.requests[0]["messages"][1]["content"]
     (episode,) = result.episodes
     assert (episode.mentions, episode.relations, episode.known) == (1, 1, 1)
-    assert result.manifest.output_format_version == OUTPUT_FORMAT_VERSION == 6
+    assert result.manifest.output_format_version == OUTPUT_FORMAT_VERSION == 7
     assert {g.ref for g in result.groundings if g.ref} == {"v1"}
     assert all(g.target_ref == "k1" for g in result.groundings if g.kind == "edge")
-    machines = result.output.to_dict()["data"]["vertices"]["Machine"]
-    assert machines == [{"serial": "S-7"}]
+    # The known machine is a reference: the relation waits for it, nothing
+    # writes it.
+    assert "Machine" not in result.output.to_dict()["data"]["vertices"]
+    assert [h.waiting_on for h in result.resolution.staged.relations] == [["k1"]]
 
 
 # --- pick --------------------------------------------------------------------
@@ -287,10 +290,14 @@ def test_a_related_known_entity_is_not_offered_for_the_mention():
         ],
     )
     speaker = EntityCandidate(
-        vertex_type="Person", key={"email": "bo@x.com"}, lane="metadata", role="speaker"
+        vertex_type="Person",
+        key={"email": "bo@x.com"},
+        lanes=[CandidateHit(lane="metadata", role="speaker")],
     )
     other = EntityCandidate(
-        vertex_type="Person", key={"email": "cy@x.com"}, lane="metadata", role="thread"
+        vertex_type="Person",
+        key={"email": "cy@x.com"},
+        lanes=[CandidateHit(lane="metadata", role="thread")],
     )
     (offer,) = offers(_pick_item(graph, [speaker, other]))
     assert list(offer.candidates.values()) == [other]
@@ -301,9 +308,7 @@ def test_a_related_known_entity_is_not_offered_for_the_mention():
     anchored = EntityCandidate(
         vertex_type="Person",
         key={"email": "di@x.com"},
-        lane="relation",
-        relation="KNOWS",
-        anchor="k1",
+        lanes=[CandidateHit(lane="relation", relation="KNOWS", anchor="k1")],
     )
     _, found = _describe(anchored, graph)
     assert found == 'relation: linked by KNOWS to "Bo"'

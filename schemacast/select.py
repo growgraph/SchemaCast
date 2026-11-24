@@ -24,6 +24,7 @@ seed closure ahead of every hit, so they are always in the slice.
 
 from __future__ import annotations
 
+import math
 import re
 from collections import defaultdict
 from collections.abc import Sequence
@@ -375,7 +376,8 @@ def _lexical_lane(
 
     scores: dict[Seed, float] = defaultdict(float)
     for row, phrases in zip(rows, row_phrases, strict=True):
-        score = sum(
+        # fsum: exact, so the score does not depend on set iteration order.
+        score = math.fsum(
             (1.0 + 0.5 * (len(phrase) - 1)) / frequency[phrase]
             for phrase in phrases
             if phrase in grams
@@ -487,7 +489,7 @@ def select(
     """Choose the schema a cast of *text* runs against.
 
     *pinned* vertex types are always in the slice, seeded ahead of retrieval
-    hits; a type the schema does not declare is ignored.
+    hits in name order; a type the schema does not declare is ignored.
 
     Raises:
         SelectionError: the text is empty, or the schema is over budget, nothing
@@ -498,7 +500,7 @@ def select(
         raise SelectionError("The text is empty.", reason="empty_text")
     hits, metrics = retrieve(schema, text, config)
     declared = schema.core_schema.vertex_config.vertex_set
-    pins = list(dict.fromkeys(t for t in pinned if t in declared))
+    pins = sorted({t for t in pinned if t in declared})
     budget = config.budget
     if _fits(schema, metrics, budget):
         return Selection(

@@ -6,12 +6,16 @@ mention-helpdesk-1:
         key:
             handle: kim
         label: Kim Ross
-        role: speaker
+        lanes:
+        -   lane: metadata
+            role: speaker
     -   type: Customer
         key:
             account: ACC-12
         label: Priya Nair
-        role: thread
+        lanes:
+        -   lane: metadata
+            role: thread
     mentions:
         c:
             candidates:
@@ -19,8 +23,9 @@ mention-helpdesk-1:
                 key:
                     account: ACC-31
                 label: Jo Andersson
-                lane: relation
-                relation: RAISED
-                anchor: t
+                lanes:
+                -   lane: relation
+                    relation: RAISED
+                    anchor: t
             pick:
                 account: ACC-31

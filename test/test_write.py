@@ -132,8 +132,9 @@ async def test_secondary_identity_mentions_are_looked_up(cast, tmp_path):
     await write_cast(await cast([ANN], {"m1": [ANN_REPLY]}), conf)
 
     result = await cast([CALL], {"m2": [CALL_REPLY]})
-    # Without the database, neither phone number identifies anyone.
-    assert [s.record.ref for s in result.resolution.staged.records] == ["p", "q"]
+    # Without the database, neither phone number identifies anyone, and the
+    # press is only mentioned: the first cast defined it.
+    assert [s.record.ref for s in result.resolution.staged.records] == ["p", "q", "m"]
     written, _ = await write_cast(result, conf)
 
     assert written.identity_of("m2", "p") == {"email": "ann@x.com"}
@@ -142,8 +143,10 @@ async def test_secondary_identity_mentions_are_looked_up(cast, tmp_path):
     ]
     with ConnectionManager(connection_config=conf) as conn:
         edges = conn.fetch_all_edges("Person", "Machine", "OPERATES")
-    assert len(edges) == 2
-    assert all(edge[0] == {"email": "ann@x.com"} for edge in edges)
+    # Both casts state Ann operates S-7: one edge, however often it is written.
+    assert {json.dumps(edge[:2], sort_keys=True) for edge in edges} == {
+        json.dumps([{"email": "ann@x.com"}, {"serial": "S-7"}], sort_keys=True)
+    }
 
     lines = [json.loads(line) for line in staged_lines(written).splitlines()]
     assert [(line["record"]["ref"], line["reason"]) for line in lines[:1]] == [

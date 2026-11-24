@@ -1,0 +1,70 @@
+qualifiers-helpdesk-1:
+    vertices:
+        t:
+            type: Ticket
+            quote: Ticket HD-5101
+            mention: true
+            props:
+                number: HD-5101
+        dock:
+            type: Product
+            quote: SKU-220 dock
+            mention: true
+            props:
+                sku: SKU-220
+        other:
+            type: Product
+            quote: SKU-210
+            mention: true
+            props:
+                sku: SKU-210
+    edges:
+    -   relation: ABOUT
+        from: t
+        to: dock
+        quote: HD-5101 is about the SKU-220 dock
+    -   relation: ABOUT
+        from: t
+        to: other
+        quote: not the SKU-210
+        negated: true
+qualifiers-helpdesk-2:
+    vertices:
+        a:
+            type: Agent
+            quote: Agent lena.k
+            mention: true
+            props:
+                handle: lena.k
+        t:
+            type: Ticket
+            quote: HD-5102
+            mention: true
+            props:
+                number: HD-5102
+    edges:
+    -   relation: HANDLES
+        from: a
+        to: t
+        quote: lena.k took over HD-5102
+        when:
+            quote: this morning
+            start: '2026-10-16'
+            end: '2026-10-16'
+            granularity: day
+qualifiers-helpdesk-3:
+    vertices:
+        t:
+            type: Ticket
+            quote: ticket HD-5103
+            props:
+                number: HD-5103
+                opened:
+                    value: '2026-10-20'
+                    quote: 20 October 2026
+                    modality: planned
+                    when:
+                        quote: on 20 October 2026
+                        start: '2026-10-20'
+                        end: '2026-10-20'
+                        granularity: day

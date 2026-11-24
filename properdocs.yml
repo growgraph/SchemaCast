@@ -3,7 +3,7 @@ site_description: Text to a labeled property graph, against a governed GraFlo sc
 site_url: https://growgraph.github.io/SchemaCast
 repo_url: https://github.com/growgraph/SchemaCast
 repo_name: growgraph/SchemaCast
-copyright: Copyright &copy; 2026 GrowGraph
+copyright: Copyright &copy; 2026 <a href="https://growgraph.dev">GrowGraph</a>
 edit_uri: edit/main/docs/
 theme:
     name: material
@@ -95,6 +95,7 @@ nav:
     -   Settings: reference/settings.md
     -   Command line: reference/cli.md
     -   Output files: reference/output.md
+    -   The neutral bundle: reference/bundle.md
     -   Python API: reference/python/
 markdown_extensions:
 -   pymdownx.highlight:

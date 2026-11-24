@@ -1,0 +1,13 @@
+{
+    "content": "{\"vertices\":[{\"ref\":\"v1\",\"type\":\"Person\",\"quote\":\"Raj Patel\",\"mention\":true,\"props\":[]},{\"ref\":\"v2\",\"type\":\"Company\",\"quote\":\"Westpeak\",\"mention\":true,\"props\":[]}],\"edges\":[{\"relation\":\"CEO_OF\",\"from\":\"v1\",\"to\":\"v2\",\"quote\":\"Raj Patel is not the CEO of Westpeak\",\"when\":null,\"modality\":\"actual\",\"negated\":true,\"props\":[]}],\"unmapped\":[{\"quote\":\"Contrary to earlier reports\",\"note\":\"Contradicts earlier reports, but no available type represents this context.\"}]}",
+    "mode": "json_schema",
+    "model": "gpt-5.6-luna",
+    "finish_reason": "stop",
+    "refusal": null,
+    "usage": {
+        "input_tokens": 1727,
+        "output_tokens": 184,
+        "reasoning_tokens": 45,
+        "cache_read_input_tokens": 1614
+    }
+}

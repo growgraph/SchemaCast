@@ -1,5 +1,5 @@
 /* Palette. The header is GrowGraph ink. The mark is text cast into a graph:
-   teal for the text side, orange for the graph side. Teal carries links,
+   green for the text side, orange for the graph side. Green carries links,
    buttons and asides; orange marks the graph, wherever a page draws one.
    Text colours meet WCAG AA against their background. */
 
@@ -8,19 +8,19 @@
   --lc-ink: #293241;
   --lc-ink-light: #3d4a5e;
   --lc-ink-dark: #1d2430;
-  --lc-teal: #0b8a7f;
-  --lc-link: #08756b;
-  /* Teal for marks on the ink, where #0b8a7f is too faint. */
-  --lc-teal-on-ink: #6fd0c4;
+  --lc-green: #008f6b;
+  --lc-link: #007a5c;
+  /* Green for marks on the ink, where #008f6b is too faint. */
+  --lc-green-on-ink: #34d3a0;
   --lc-orange: #be5103;
-  --lc-mark: var(--lc-teal);
+  --lc-mark: var(--lc-green);
   --lc-graph: var(--lc-orange);
   --lc-amber: #f39c12;
   --lc-amber-text: #b9700a;
   --lc-rule: rgba(41, 50, 65, 0.16);
   --lc-tint: rgba(41, 50, 65, 0.06);
-  --lc-teal-tint: rgba(11, 138, 127, 0.08);
-  --lc-quote: rgba(11, 138, 127, 0.3);
+  --lc-green-tint: rgba(0, 143, 107, 0.08);
+  --lc-quote: rgba(0, 143, 107, 0.3);
   --lc-amber-tint: rgba(243, 156, 18, 0.1);
 
   --md-primary-fg-color: var(--lc-ink);
@@ -40,13 +40,13 @@
    header belong to one family. */
 [data-md-color-scheme="slate"] {
   --md-hue: 218;
-  --lc-mark: var(--lc-teal-on-ink);
+  --lc-mark: var(--lc-green-on-ink);
   --lc-graph: #f2a268;
   --lc-amber-text: #f5b041;
   --lc-rule: rgba(255, 255, 255, 0.16);
   --lc-tint: rgba(255, 255, 255, 0.05);
-  --lc-teal-tint: rgba(111, 208, 196, 0.08);
-  --lc-quote: rgba(111, 208, 196, 0.3);
+  --lc-green-tint: rgba(52, 211, 160, 0.08);
+  --lc-quote: rgba(52, 211, 160, 0.3);
   --lc-amber-tint: rgba(243, 156, 18, 0.1);
 
   --md-primary-fg-color: #1d2430;
@@ -134,7 +134,7 @@ body {
 }
 
 .md-tabs__item--active .md-tabs__link {
-  box-shadow: inset 0 -0.12rem 0 var(--lc-teal-on-ink);
+  box-shadow: inset 0 -0.12rem 0 var(--lc-green-on-ink);
 }
 
 /* Buttons. */
@@ -221,7 +221,7 @@ body {
 .md-typeset .admonition.example,
 .md-typeset details.example {
   border-color: var(--lc-mark);
-  background-color: var(--lc-teal-tint);
+  background-color: var(--lc-green-tint);
 }
 
 .md-typeset .note > .admonition-title,
@@ -364,7 +364,7 @@ body {
 }
 
 /* A short text on the left, the graph cast from it on the right: each quote
-   (teal) is tied to the vertex it grounds (orange) by a dashed line. */
+   (green) is tied to the vertex it grounds (orange) by a dashed line. */
 
 .md-typeset .lc-cast {
   margin: 0 auto;

@@ -15,7 +15,7 @@ from typing import Any
 
 import httpx
 
-from schemacast.bench.corpus import ExpectedEpisode, ExpectedProp
+from schemacast.bench.corpus import ExpectedEpisode, ExpectedProp, ExpectedQualifiers
 from schemacast.config import CacheSettings, LLMSettings
 from schemacast.llm.cache import LLMCache
 from schemacast.llm.client import LLMClient
@@ -26,9 +26,17 @@ ORACLE = "oracle"
 _EPISODE_ID = re.compile(r"<<<EPISODE id=(\S+) tag=")
 
 
+def _qualifiers(item: ExpectedQualifiers) -> dict[str, Any]:
+    return {
+        "when": item.when.model_dump() if item.when is not None else None,
+        "modality": item.modality,
+        "negated": item.negated,
+    }
+
+
 def _props(props: dict[str, ExpectedProp]) -> list[dict[str, Any]]:
     return [
-        {"name": name, "value": prop.value, "quote": prop.evidence}
+        {"name": name, "value": prop.value, "quote": prop.evidence, **_qualifiers(prop)}
         for name, prop in props.items()
     ]
 
@@ -52,6 +60,7 @@ def oracle_reply(expected: ExpectedEpisode) -> dict[str, Any]:
                 "from": edge.from_,
                 "to": edge.to,
                 "quote": edge.quote,
+                **_qualifiers(edge),
                 "props": _props(edge.props),
             }
             for edge in expected.edges

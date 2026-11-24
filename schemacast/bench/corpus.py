@@ -31,10 +31,12 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
+from graflo.architecture.schema.compare import MatchLevel
 from graflo.architecture.schema.document import Schema
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from schemacast.episode import Episode, read_episodes
+from schemacast.ground import Granularity, Modality
 
 BENCH_DIR = Path(__file__).parent
 CASES_DIR = BENCH_DIR / "cases"
@@ -43,15 +45,36 @@ SPLITS_FILE = CASES_DIR / "SPLITS.yaml"
 
 #: Bump whenever a case, schema or split assignment changes. Results from
 #: different versions are not comparable.
-CORPUS_VERSION = "1.3.0"
+CORPUS_VERSION = "1.6.0"
 
 #: Content hash of ``cases/`` and ``schemas/`` at :data:`CORPUS_VERSION`.
-CORPUS_DIGEST = "6a293a0455ccd4ea0dc59fe0583fe0a53db232a710949f83b48e2dd2fbdd7e97"
+CORPUS_DIGEST = "f0fc6b2b7c98cf01cf7b8e6ee45bc2c9fddcf1129053d99241851307a33e1a53"
 
 Split = Literal["dev", "test"]
 
 
-class ExpectedProp(BaseModel):
+class ExpectedWhen(BaseModel):
+    """The time a statement says its fact holds, as the reference time resolves it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    quote: str
+    start: str
+    end: str | None = None
+    granularity: Granularity
+
+
+class ExpectedQualifiers(BaseModel):
+    """Qualifiers an expected edge or property carries; defaults when unqualified."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    when: ExpectedWhen | None = None
+    modality: Modality = "actual"
+    negated: bool = False
+
+
+class ExpectedProp(ExpectedQualifiers):
     """A property value as the schema's field holds it, and the text it is read from.
 
     ``quote`` defaults to the value as written; give it when the text writes the
@@ -107,8 +130,8 @@ class ExpectedVertex(BaseModel):
         return _props(value)
 
 
-class ExpectedEdge(BaseModel):
-    """A relation the text states, between two vertex handles."""
+class ExpectedEdge(ExpectedQualifiers):
+    """A relation the text states, or denies, between two vertex handles."""
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -156,22 +179,44 @@ class ExpectedEpisode(ExpectedGraph):
         return self
 
 
-class ExpectedCandidate(BaseModel):
-    """An entity offered to a pick, as graflo's ``EntityCandidate`` holds it.
+class ExpectedHit(BaseModel):
+    """One way a candidate was found, as graflo's ``CandidateHit`` holds it.
 
     ``anchor`` names an expected vertex handle of the same episode.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    type: str
-    key: dict[str, Any]
-    label: str | None = None
-    lane: str = "metadata"
+    lane: str
     matched: str | None = None
     relation: str | None = None
     anchor: str | None = None
     role: str | None = None
+    targets: int | None = None
+    level: MatchLevel | None = None
+
+
+class ExpectedAttribute(BaseModel):
+    """A stated property checked against the candidate, as graflo's
+    ``AttributeCheck`` holds it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: str
+    level: MatchLevel
+    exclusive: bool = False
+
+
+class ExpectedCandidate(BaseModel):
+    """An entity offered to a pick, as graflo's ``EntityCandidate`` holds it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    key: dict[str, Any]
+    label: str | None = None
+    lanes: list[ExpectedHit] = Field(min_length=1)
+    attributes: list[ExpectedAttribute] = Field(default_factory=list)
 
 
 class ExpectedPickMention(BaseModel):

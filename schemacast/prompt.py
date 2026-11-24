@@ -48,10 +48,24 @@ RULES = """\
   Give the `id:` properties of a vertex whenever the text states them.
 - An entity the text names without its key is still a vertex of its type:
   give no key rather than leave the entity out.
+- Every edge and property has three qualifiers. Keep the defaults (`when`
+  null, `modality` actual, `negated` false) unless the text says otherwise.
+  - `when`: the time the text says the edge or value holds. Its `quote` is the
+    time phrase; `start` and `end` are ISO 8601 dates (2024-03-04) or
+    date-times (2024-03-04T18:00), a relative time resolved against the
+    reference time; `end` is null when the text gives no end; `granularity` is
+    instant, day, week, month or year. One day has equal `start` and `end`; a
+    week, month or year runs from its first day to its last. Without a
+    reference time, give `when` only for a time the text states in full.
+  - `modality`: actual for what is or was so, planned for what is intended or
+    scheduled, hedged for what the text gives as uncertain.
+  - `negated`: true when the text denies the edge or the value ("not X"). A
+    value that is itself no or false is a value, not a denial. A key property
+    is never negated.
 - `quote` is the exact span of the text you relied on, copied character for
-  character: one for each vertex, edge and property. Every quote, those in
-  `unmapped` included, comes from inside a delimited block, never from a
-  heading, the reference time or a `<<<...>>>` marker.
+  character: one for each vertex, edge, property and `when`. Every quote,
+  those in `unmapped` included, comes from inside a delimited block, never
+  from a heading, the reference time or a `<<<...>>>` marker.
 - Put anything the text states that no type covers in `unmapped`, with its
   quote and a short note.
 - CONTEXT, when present, holds earlier texts. Use it only to tell what the TEXT
@@ -76,8 +90,9 @@ def known_refs(known: Sequence[KnownEntity], slice_: Schema) -> dict[str, KnownE
     """The known entities a cast against *slice_* can use, by ref ``k1``….
 
     One is usable when its type is in the slice, the type takes its key from
-    the data, and the key names exactly the type's identity fields. The prompt
-    and validation number them the same way.
+    the data, and the key names exactly the type's identity fields. They are
+    numbered by type, key, role and label, never by the caller's order; the
+    prompt and validation number them the same way.
     """
     config = slice_.core_schema.vertex_config
     usable: list[KnownEntity] = []
@@ -89,6 +104,14 @@ def known_refs(known: Sequence[KnownEntity], slice_: Schema) -> dict[str, KnownE
             contract.identity_fields
         ):
             usable.append(entity)
+    usable.sort(
+        key=lambda e: (
+            e.vertex_type,
+            json.dumps(e.key, sort_keys=True, ensure_ascii=False),
+            e.role,
+            e.label or "",
+        )
+    )
     return {f"k{i}": entity for i, entity in enumerate(usable, start=1)}
 
 

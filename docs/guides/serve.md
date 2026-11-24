@@ -31,7 +31,8 @@ endpoint.
 The reply holds what [`schemacast cast --out`](../reference/output.md) writes:
 `mentions` (one graflo `RecordGraph` per episode; each record, relation and
 property carries `evidence`: `{"quote": …, "span": {"start": …, "end": …}}`,
-`span.context` when read in a context item), `graph` (graflo's `GraFloOutput`
+`span.context` when read in a context item, and any qualifiers; what the text
+denies is left out and grounded only), `graph` (graflo's `GraFloOutput`
 of what the keys identify without a database), `staged` (graflo `Staged`:
 `records` of `StagedRecord`, and held `relations`), `groundings`, `unmapped`
 (by episode `source_id`: `quote`, `note`, `span`), `quarantine`, `episodes` and
@@ -64,7 +65,8 @@ entities its metadata names. The
 reply holds `picks` (one per staged mention, in order: `source_id`, `ref`,
 `type`, `outcome`, `candidate`, `detail`), `episodes` and `manifest`. A
 `picked` mention is closed by the caller with `candidate.key`. Statuses as for
-`/cast`; a cache miss under `SCHEMACAST_CACHE_REQUIRE_HIT` is 409.
+`/cast`; a cache miss under `SCHEMACAST_CACHE_REQUIRE_HIT` is 409, with
+`miss` (key, stage, source, nearest stored request, diff) beside `detail`.
 
 ## Authentication
 

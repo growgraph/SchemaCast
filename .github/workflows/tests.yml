@@ -5,8 +5,8 @@ on:
     push:
         branches: [main]
     schedule:
-        # Daily: catches a new graflo release that breaks this package.
-    -   cron: '35 5 * * *'
+        # Weekly (Mondays): catches a new graflo release that breaks this package.
+    -   cron: '35 5 * * 1'
     workflow_dispatch:
 
 concurrency:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import random
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,8 @@ from graflo.db.manager import ConnectionManager
 from graflo.hq.container_write import write_container
 from graflo.link.candidates import gather_candidates
 from graflo.link.records import (
+    AttributeCheck,
+    CandidateHit,
     EntityCandidate,
     PartialRecord,
     RecordGraph,
@@ -30,14 +33,18 @@ from schemacast.cli import main
 from schemacast.config import CacheSettings, SchemaCastSettings, ServeSettings
 from schemacast.episode import Episode
 from schemacast.ground import TextSpan, evidence, quote_of
-from schemacast.llm.cache import CacheMissError
+from schemacast.llm.cache import CacheMissError, cache_key
 from schemacast.pick import (
+    LANE_RANK,
+    MAX_OFFERED,
+    NONE,
     PICK_SCHEMA_NAME,
     Picker,
     PickItem,
     apply_picks,
     offers,
     pick_messages,
+    pick_shape,
 )
 from schemacast.serve import create_app
 
@@ -110,19 +117,18 @@ JO = EntityCandidate(
     vertex_type="Customer",
     key={"account": "ACC-31"},
     label="Jo Andersson",
-    lane="relation",
-    relation="RAISED",
-    anchor="t",
+    lanes=[CandidateHit(lane="relation", relation="RAISED", anchor="t")],
 )
 PRIYA = EntityCandidate(
     vertex_type="Customer",
     key={"account": "ACC-12"},
     label="Priya Nair",
-    lane="metadata",
-    role="speaker",
+    lanes=[CandidateHit(lane="metadata", role="speaker")],
 )
 KIM = EntityCandidate(
-    vertex_type="Agent", key={"handle": "kim"}, lane="metadata", role="speaker"
+    vertex_type="Agent",
+    key={"handle": "kim"},
+    lanes=[CandidateHit(lane="metadata", role="speaker")],
 )
 
 
@@ -231,6 +237,234 @@ def test_the_prompt_is_byte_deterministic():
     assert pick_messages(item, offers(item)) == pick_messages(item, offers(item))
 
 
+# -- canonical order -----------------------------------------------------------
+
+ALEX = EntityCandidate(
+    vertex_type="Customer",
+    key={"account": "ACC-40"},
+    label="Alex Berg",
+    lanes=[
+        CandidateHit(lane="alias", matched="Alex"),
+        CandidateHit(lane="exact", matched="Alex Berg"),
+    ],
+    attributes=[
+        AttributeCheck(field="name", level="exact", exclusive=False),
+        AttributeCheck(field="email", level="unknown", exclusive=True),
+    ],
+)
+SAM = EntityCandidate(
+    vertex_type="Customer",
+    key={"account": "ACC-02"},
+    lanes=[CandidateHit(lane="normalized", matched="sam")],
+)
+# Metadata names a lookup candidate too: its lane joins that candidate.
+PRIYA_LOOKUP = PRIYA.model_copy(
+    update={"lanes": [CandidateHit(lane="exact", matched="Priya")]}
+)
+SECOND = PartialRecord(
+    ref="b",
+    type="Customer",
+    may_create=False,
+    props={"name": _prop("Priya")},
+    evidence=evidence("Priya", SPAN),
+)
+
+
+def _ordered_item(order: int) -> PickItem:
+    """The same staged mentions and candidates, listed in an order *order* picks."""
+    rng = random.Random(order)
+
+    def shuffled(values):
+        values = list(values)
+        rng.shuffle(values)
+        return values
+
+    def jumbled(candidate: EntityCandidate) -> EntityCandidate:
+        return candidate.model_copy(
+            update={
+                "lanes": shuffled(candidate.lanes),
+                "attributes": shuffled(candidate.attributes),
+            }
+        )
+
+    first = StagedCandidates(
+        source_id="mail-1",
+        record=_graph().records[0],
+        reason="unmatched",
+        candidates=shuffled(map(jumbled, [JO, ALEX, SAM])),
+    )
+    second = StagedCandidates(
+        source_id="mail-1",
+        record=SECOND,
+        reason="unmatched",
+        candidates=shuffled(map(jumbled, [PRIYA_LOOKUP, SAM])),
+    )
+    return PickItem(
+        episode=EPISODE,
+        staged=shuffled([first, second]),
+        entities=shuffled([PRIYA, KIM]),
+        graph=_graph(),
+    )
+
+
+def test_the_prompt_does_not_depend_on_the_callers_order(llm_settings):
+    expected = _ordered_item(0)
+    asked = offers(expected)
+    messages = pick_messages(expected, asked)
+    for order in range(1, 12):
+        item = _ordered_item(order)
+        again = offers(item)
+        assert pick_messages(item, again) == messages
+        assert pick_shape(again) == pick_shape(asked)
+        assert cache_key(
+            pick_messages(item, again), pick_shape(again), llm_settings
+        ) == cache_key(messages, pick_shape(asked), llm_settings)
+
+
+def test_mentions_follow_their_ref_and_candidates_their_best_lane():
+    asked = offers(_ordered_item(3))
+    assert [(o.mid, o.mention.ref) for o in asked] == [("m1", "b"), ("m2", "c")]
+    by_mention = {
+        o.mention.ref: [(cid, c.key["account"]) for cid, c in o.candidates.items()]
+        for o in asked
+    }
+    # Lookup lanes first, by rank (exact, normalized), then metadata only.
+    assert by_mention["b"] == [("c1", "ACC-12"), ("c2", "ACC-02")]
+    assert by_mention["c"] == [
+        ("c3", "ACC-40"),
+        ("c4", "ACC-02"),
+        ("c5", "ACC-31"),
+        ("c6", "ACC-12"),
+    ]
+    priya = asked[0].candidates["c1"]
+    assert [h.lane for h in priya.lanes] == ["exact", "metadata"]
+    assert [h.lane for h in asked[1].candidates["c3"].lanes] == ["exact", "alias"]
+    assert [a.field for a in asked[1].candidates["c3"].attributes] == [
+        "email",
+        "name",
+    ]
+
+
+def test_a_mention_is_offered_its_best_four_candidates_and_none():
+    hits = [
+        CandidateHit(lane="context", anchor="t", level="exact"),
+        CandidateHit(lane="metadata", role="speaker"),
+        CandidateHit(lane="relation", relation="RAISED", anchor="t"),
+        CandidateHit(lane="exact", matched="Jo"),
+        CandidateHit(lane="normalized", matched="Jo"),
+        CandidateHit(lane="key", matched="Jo"),
+    ]
+    many = [
+        EntityCandidate(
+            vertex_type="Customer", key={"account": f"ACC-{i}"}, lanes=[hit]
+        )
+        for i, hit in enumerate(hits)
+    ]
+    [offer] = offers(_item(*many))
+    assert len(offer.candidates) == MAX_OFFERED == 4
+    assert [c.lanes[0].lane for c in offer.candidates.values()] == [
+        "exact",
+        "key",
+        "normalized",
+        "relation",
+    ]
+    enum = pick_shape([offer])["properties"]["picks"]["items"]["properties"][
+        "candidate"
+    ]["enum"]
+    assert enum == [*offer.candidates, NONE]
+
+
+def test_picks_keep_the_callers_order(make_client):
+    item = _ordered_item(5)
+    refs = [entry.record.ref for entry in item.staged]
+    result, _ = _pick(make_client, [item], _reply(("m1", "c1"), ("m2", NONE)))
+    assert [p.ref for p in result.picks] == refs
+    by_ref = {p.ref: p for p in result.picks}
+    assert by_ref["b"].outcome == "picked" and by_ref["b"].key == {"account": "ACC-12"}
+    assert by_ref["c"].outcome == "none"
+
+
+def test_lane_ranks_follow_graflo():
+    from graflo.link.candidates import LANE_ORDER
+
+    assert LANE_RANK == LANE_ORDER
+
+
+# -- evidence ----------------------------------------------------------------
+
+JO_BY_NAME = EntityCandidate(
+    vertex_type="Customer",
+    key={"account": "ACC-31"},
+    label="Jo Andersson",
+    lanes=[CandidateHit(lane="exact", matched="Jo Andersson")],
+)
+
+
+def _mentions(item: PickItem) -> list[str]:
+    user = pick_messages(item, offers(item))[1]["content"]
+    return [line for line in user.splitlines() if line.startswith("  c")]
+
+
+def test_one_lane_and_no_attributes_render_as_one_way_found():
+    assert _mentions(
+        _item(
+            JO_BY_NAME,
+            JO.model_copy(update={"key": {"account": "ACC-7"}}),
+            graph=_graph(),
+        )
+    ) == [
+        '  c1: "Jo Andersson" (Customer; account="ACC-31"); found by exact: "Jo Andersson"',
+        '  c2: "Jo Andersson" (Customer; account="ACC-7"); found by relation: linked by RAISED to "HD-4411"',
+    ]
+
+
+def test_every_lane_and_the_attribute_levels_are_shown():
+    jo = JO_BY_NAME.model_copy(
+        update={
+            "lanes": [
+                *JO_BY_NAME.lanes,
+                *JO.lanes,
+                CandidateHit(lane="context", role="subject", level="unknown"),
+            ],
+            "attributes": [
+                AttributeCheck(field="name", level="exact", exclusive=False),
+                AttributeCheck(field="email", level="conflict", exclusive=True),
+                AttributeCheck(field="site", level="compatible", exclusive=False),
+                AttributeCheck(field="title", level="differs", exclusive=False),
+            ],
+        }
+    )
+    (line,) = _mentions(_item(jo, graph=_graph()))
+    assert line == (
+        '  c1: "Jo Andersson" (Customer; account="ACC-31"); found by exact: '
+        '"Jo Andersson", relation: linked by RAISED to "HD-4411", context: linked '
+        "to the record's subject; stated email conflicts, name matches, site fits, "
+        "title differs"
+    )
+
+
+def test_a_metadata_entity_already_a_candidate_adds_its_lane():
+    priya = JO_BY_NAME.model_copy(update={"key": PRIYA.key, "label": None})
+    (offer,) = offers(_item(priya, entities=[PRIYA]))
+    (candidate,) = offer.candidates.values()
+    assert [hit.lane for hit in candidate.lanes] == ["exact", "metadata"]
+    assert candidate.label == "Priya Nair"
+
+
+def test_the_check_ignores_evidence_against_a_candidate(make_client):
+    against = JO.model_copy(
+        update={
+            "attributes": [
+                AttributeCheck(field="email", level="conflict", exclusive=True)
+            ]
+        }
+    )
+    result, _ = _pick(make_client, [_item(against)], _reply(("m1", "c1")))
+    assert [(p.outcome, p.key) for p in result.picks] == [
+        ("picked", {"account": "ACC-31"})
+    ]
+
+
 def test_none_and_an_unanswered_mention_link_nothing(make_client):
     result, _ = _pick(make_client, [_item(JO)], _reply(("m1", "none")))
     assert [(p.outcome, p.candidate) for p in result.picks] == [("none", None)]
@@ -298,8 +532,11 @@ def test_a_pick_replays_from_the_cache(make_client):
     assert result.picks[0].outcome == "picked"
     assert endpoint.requests == []
     assert result.manifest.usage.cache_hits == 1
-    with pytest.raises(CacheMissError):
+    with pytest.raises(CacheMissError) as caught:
         _pick(make_client, [_item(JO, PRIYA)], cache=replay)
+    assert (caught.value.stage, caught.value.source_id) == ("pick", "mail-1")
+    assert caught.value.nearest is not None
+    assert caught.value.diff is not None and "Priya Nair" in caught.value.diff
 
 
 def test_an_item_holds_one_source():

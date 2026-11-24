@@ -6,7 +6,9 @@ mention-logistics-1:
         key:
             license: L-4471
         label: Ola Nordmann
-        role: subject
+        lanes:
+        -   lane: metadata
+            role: subject
     mentions:
         d:
             candidates:
@@ -14,8 +16,9 @@ mention-logistics-1:
                 key:
                     license: L-5210
                 label: Kari Lunde
-                lane: relation
-                relation: DRIVES_FOR
-                anchor: c
+                lanes:
+                -   lane: relation
+                    relation: DRIVES_FOR
+                    anchor: c
             pick:
                 license: L-4471

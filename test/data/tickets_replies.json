@@ -352,5 +352,155 @@
                 }
             ]
         }
+    ],
+    "chat-2214": [
+        {
+            "vertices": [
+                {
+                    "ref": "v1",
+                    "type": "Agent",
+                    "quote": "Agent kim.r",
+                    "mention": false,
+                    "props": [
+                        {
+                            "name": "handle",
+                            "value": "kim.r",
+                            "quote": "kim.r"
+                        }
+                    ]
+                },
+                {
+                    "ref": "v2",
+                    "type": "Tag",
+                    "quote": "firmware",
+                    "mention": false,
+                    "props": [
+                        {
+                            "name": "label",
+                            "value": "firmware",
+                            "quote": "firmware"
+                        }
+                    ]
+                }
+            ],
+            "edges": [
+                {
+                    "relation": "HANDLES",
+                    "from": "v1",
+                    "to": "k1",
+                    "quote": "Agent kim.r takes this ticket over",
+                    "props": []
+                },
+                {
+                    "relation": "TAGGED",
+                    "from": "k1",
+                    "to": "v2",
+                    "quote": "Tagged it firmware.",
+                    "props": []
+                }
+            ],
+            "unmapped": []
+        }
+    ],
+    "mail-1043": [
+        {
+            "vertices": [
+                {
+                    "ref": "v1",
+                    "type": "Ticket",
+                    "quote": "HD-4415",
+                    "mention": true,
+                    "props": [
+                        {
+                            "name": "number",
+                            "value": "HD-4415",
+                            "quote": "HD-4415"
+                        },
+                        {
+                            "name": "severity",
+                            "value": 1,
+                            "quote": "severity may be 1",
+                            "modality": "hedged"
+                        }
+                    ]
+                },
+                {
+                    "ref": "v2",
+                    "type": "Product",
+                    "quote": "the Desk Fan (SKU-81)",
+                    "mention": false,
+                    "props": [
+                        {
+                            "name": "name",
+                            "value": "Desk Fan",
+                            "quote": "Desk Fan"
+                        },
+                        {
+                            "name": "sku",
+                            "value": "SKU-81",
+                            "quote": "SKU-81"
+                        }
+                    ]
+                },
+                {
+                    "ref": "v3",
+                    "type": "Product",
+                    "quote": "the Desk Lamp (SKU-77)",
+                    "mention": true,
+                    "props": [
+                        {
+                            "name": "sku",
+                            "value": "SKU-77",
+                            "quote": "SKU-77"
+                        }
+                    ]
+                },
+                {
+                    "ref": "v4",
+                    "type": "Agent",
+                    "quote": "Agent lena.k",
+                    "mention": true,
+                    "props": [
+                        {
+                            "name": "handle",
+                            "value": "lena.k",
+                            "quote": "lena.k"
+                        }
+                    ]
+                }
+            ],
+            "edges": [
+                {
+                    "relation": "ABOUT",
+                    "from": "v1",
+                    "to": "v2",
+                    "quote": "HD-4415 is about the Desk Fan (SKU-81)",
+                    "props": []
+                },
+                {
+                    "relation": "ABOUT",
+                    "from": "v1",
+                    "to": "v3",
+                    "quote": "not the Desk Lamp (SKU-77)",
+                    "negated": true,
+                    "props": []
+                },
+                {
+                    "relation": "HANDLES",
+                    "from": "v4",
+                    "to": "v1",
+                    "quote": "Agent lena.k will take it over on Monday",
+                    "modality": "planned",
+                    "when": {
+                        "quote": "on Monday",
+                        "start": "2026-03-09",
+                        "end": null,
+                        "granularity": "day"
+                    },
+                    "props": []
+                }
+            ],
+            "unmapped": []
+        }
     ]
 }

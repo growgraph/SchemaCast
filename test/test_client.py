@@ -19,6 +19,7 @@ from schemacast.llm import (
     LLMTruncatedError,
     track_usage,
 )
+from schemacast.llm.cache import cache_key
 from schemacast.llm.client import SCHEMA_INSTRUCTION
 
 SCHEMA_REJECTED = error(
@@ -291,3 +292,44 @@ def test_client_works_across_event_loops(make_client):
     asyncio.run(client.acomplete_json(MESSAGES, SCHEMA))
     asyncio.run(client.acomplete_json([*MESSAGES, MESSAGES[0]], SCHEMA))
     assert len(endpoint.requests) == 2
+
+
+async def test_a_call_stores_its_request_with_stage_and_source(make_client):
+    client, _ = make_client({"answer": "x"})
+    await client.acomplete_json(MESSAGES, SCHEMA, stage="cast", source_id="note-1")
+    key = cache_key(MESSAGES, SCHEMA, client.settings)
+    stored = client.cache.stored_request(key)
+    assert stored is not None
+    assert (stored.stage, stored.source_id) == ("cast", "note-1")
+    assert stored.request["messages"] == MESSAGES
+
+
+async def test_a_hit_adds_a_missing_request_unless_read_only(make_client, tmp_path):
+    client, _ = make_client({"answer": "x"})
+    await client.acomplete_json(MESSAGES, SCHEMA)
+    key = cache_key(MESSAGES, SCHEMA, client.settings)
+    client.cache.request_path(key).unlink()
+
+    reader, _ = make_client(cache=CacheSettings(read_only=True))
+    await reader.acomplete_json(MESSAGES, SCHEMA, stage="pick")
+    assert not reader.cache.request_path(key).exists()
+
+    await client.acomplete_json(MESSAGES, SCHEMA, stage="pick", source_id="m")
+    stored = client.cache.stored_request(key)
+    assert stored is not None and stored.stage == "pick"
+
+
+async def test_a_strict_miss_explains_itself(make_client):
+    client, _ = make_client({"answer": "x"})
+    await client.acomplete_json(MESSAGES, SCHEMA, stage="cast", source_id="s")
+    changed = [MESSAGES[0], {**MESSAGES[1], "content": MESSAGES[1]["content"] + "!"}]
+
+    replayer, endpoint = make_client(cache=CacheSettings(require_hit=True))
+    with pytest.raises(CacheMissError) as caught:
+        await replayer.acomplete_json(changed, SCHEMA, stage="cast", source_id="s")
+    error = caught.value
+    assert endpoint.requests == []
+    assert (error.stage, error.source_id) == ("cast", "s")
+    assert error.key == cache_key(changed, SCHEMA, replayer.settings)
+    assert error.nearest == cache_key(MESSAGES, SCHEMA, client.settings)
+    assert error.diff is not None and "!" in error.diff
