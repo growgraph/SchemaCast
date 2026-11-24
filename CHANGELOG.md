@@ -51,9 +51,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lead with it.
 - `examples/tickets`: a text about a known ticket, a text with a denial, a planned date and a
   hedged value, and `pick.jsonl`.
+- `CONTRIBUTING.md`, a contributing guide in the docs, and the Contributor License Agreement
+  (`CLA.md`), checked on every pull request.
 
 ### Changed
 
+- A clone installs with `uv sync` alone: development takes graflo from PyPI, not a sibling checkout.
 - Requires graflo ≥ 1.27.5: record graphs, resolution, candidates and graded attributes come from
   `graflo.link`, the compact notation from `graflo.interop.compact`.
 - **A cast is a mention graph.** Each episode yields graflo `RecordGraph`s (mentions with their

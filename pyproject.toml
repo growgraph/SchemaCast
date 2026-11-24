@@ -85,6 +85,3 @@ testpaths = ["test"]
 
 [tool.ruff.lint]
 ignore = ["E722"]
-
-[tool.uv.sources]
-graflo = { editable = true, path = "../graflo" }

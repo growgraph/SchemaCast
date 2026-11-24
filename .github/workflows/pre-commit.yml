@@ -32,8 +32,8 @@ jobs:
         # Lint and formatting only; type checking runs in tests.yml, where the
         # whole program is installed.
         -   name: Install dependencies
-            run: uv sync --no-sources --group dev --no-install-project
+            run: uv sync --group dev --no-install-project
         -   name: Run pre-commit
-            run: uv run --no-sources pre-commit run --all-files
+            run: uv run pre-commit run --all-files
             env:
                 SKIP: ty

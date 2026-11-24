@@ -580,7 +580,7 @@ wheels = [
 [[package]]
 name = "graflo"
 version = "1.27.5"
-source = { editable = "../graflo" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3" },
     { name = "click" },
@@ -609,56 +609,10 @@ dependencies = [
     { name = "urllib3" },
     { name = "xmltodict" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "boto3", specifier = ">=1.35.0,<2" },
-    { name = "click", specifier = ">=8.2.0,<9" },
-    { name = "confluent-kafka", specifier = ">=2.6.0" },
-    { name = "duckdb", marker = "extra == 'bulk'", specifier = ">=1.1" },
-    { name = "falkordb", specifier = ">=1.0.9" },
-    { name = "graflo", extras = ["bulk"], marker = "extra == 'dev'" },
-    { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.140.0" },
-    { name = "ijson", specifier = ">=3.2.3,<4" },
-    { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.23.0" },
-    { name = "mkdocs-gen-files", marker = "extra == 'docs'", specifier = ">=0.5.0" },
-    { name = "mkdocs-glightbox", marker = "extra == 'docs'", specifier = ">=0.4.0" },
-    { name = "mkdocs-literate-nav", marker = "extra == 'docs'", specifier = ">=0.6.2" },
-    { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.6.12" },
-    { name = "mkdocs-table-reader-plugin", marker = "extra == 'docs'", specifier = ">=3.1.0" },
-    { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.29.1" },
-    { name = "nebula3-python", specifier = ">=3.8.3" },
-    { name = "nebula5-python", specifier = ">=5.2.1" },
-    { name = "neo4j", specifier = ">=5.22.0,<6" },
-    { name = "networkx", specifier = "~=3.3" },
-    { name = "pandas", specifier = ">=2.0.3,<4" },
-    { name = "pandas-stubs", specifier = "==2.3.0.250703" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.2.0" },
-    { name = "properdocs", marker = "extra == 'docs'", specifier = ">=1.6.7" },
-    { name = "psycopg2-binary", specifier = ">=2.9.11" },
-    { name = "pydantic", specifier = ">=2.12.5" },
-    { name = "pydantic-settings", specifier = ">=2.12.0" },
-    { name = "pymgclient", specifier = ">=1.3.1" },
-    { name = "pypdfium2", marker = "extra == 'plot'", specifier = ">=5,<6" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.2" },
-    { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.4.0" },
-    { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.8.0" },
-    { name = "python-arango", specifier = ">=8.1.2,<9" },
-    { name = "rdflib", specifier = ">=7.0.0" },
-    { name = "redis", specifier = ">=5.0.0" },
-    { name = "requests", specifier = ">=2.31.0" },
-    { name = "sparqlwrapper", specifier = ">=2.0.0" },
-    { name = "sqlalchemy", specifier = ">=2.0.0" },
-    { name = "strenum", specifier = ">=0.4.15" },
-    { name = "suthing", specifier = ">=0.6.1,<0.7" },
-    { name = "svglib", marker = "extra == 'plot'", specifier = ">=2.2,<3" },
-    { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.1a24" },
-    { name = "urllib3", specifier = ">=2.0.0" },
-    { name = "wasi-graphviz", extras = ["wasmtime"], marker = "extra == 'plot'", specifier = ">=0.1.4,<0.2" },
-    { name = "xmltodict", specifier = ">=0.14.2,<0.15" },
-    { name = "zstandard", marker = "extra == 'bulk'", specifier = ">=0.23" },
+sdist = { url = "https://files.pythonhosted.org/packages/b9/95/c8fd2c4342252063c1a1fae16954493fc127ab62fe3d6c6157da56a5489d/graflo-1.27.5.tar.gz", hash = "sha256:64752404da22b756b4652a17a78ba847920cb06a94f359bf03ae823160074364", size = 2251585, upload-time = "2026-11-23T23:54:17.545Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/51/b9/3085ebab3b25b4ea44bbd30f12c58921ee6320b12646308b367bd8459d48/graflo-1.27.5-py3-none-any.whl", hash = "sha256:6dcaa0312da2365dc93687004f0482481117671e616f03968cc62726372006c2", size = 2483190, upload-time = "2026-11-23T23:54:16.035Z" },
 ]
-provides-extras = ["bulk", "dev", "docs", "plot"]
 
 [[package]]
 name = "griffelib"
@@ -2797,7 +2751,7 @@ docs = [
 requires-dist = [
     { name = "click", specifier = ">=8.2.0,<9" },
     { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.134.0,<1" },
-    { name = "graflo", editable = "../graflo" },
+    { name = "graflo", specifier = ">=1.27.5,<2" },
     { name = "openai", specifier = ">=1.109.0,<3" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
